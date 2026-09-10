@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 90" role="img" aria-label="Каравай">
+  <!-- Пшеничные колосья и каравай -->
+  <g fill="#FFD100">
+    <!-- центральный стебель -->
+    <rect x="43.6" y="6" width="1.8" height="26"/>
+    <!-- центральные зёрна (5 пар) -->
+    <ellipse cx="41.3" cy="10" rx="1.9" ry="3.2" transform="rotate(-25 41.3 10)"/>
+    <ellipse cx="47.7" cy="10" rx="1.9" ry="3.2" transform="rotate(25 47.7 10)"/>
+    <ellipse cx="40.5" cy="15" rx="1.9" ry="3.2" transform="rotate(-25 40.5 15)"/>
+    <ellipse cx="48.5" cy="15" rx="1.9" ry="3.2" transform="rotate(25 48.5 15)"/>
+    <ellipse cx="39.8" cy="20" rx="2" ry="3.4" transform="rotate(-25 39.8 20)"/>
+    <ellipse cx="49.2" cy="20" rx="2" ry="3.4" transform="rotate(25 49.2 20)"/>
+    <ellipse cx="39.2" cy="25" rx="2" ry="3.4" transform="rotate(-25 39.2 25)"/>
+    <ellipse cx="49.8" cy="25" rx="2" ry="3.4" transform="rotate(25 49.8 25)"/>
+    <ellipse cx="38.6" cy="30" rx="2.1" ry="3.6" transform="rotate(-25 38.6 30)"/>
+    <ellipse cx="50.4" cy="30" rx="2.1" ry="3.6" transform="rotate(25 50.4 30)"/>
+    <!-- боковые колосья (стилизация) -->
+    <path d="M32 34 Q26 26 22 16 Q29 22 34 30 Z"/>
+    <path d="M57 34 Q63 26 67 16 Q60 22 55 30 Z"/>
+    <!-- каравай — половина круга -->
+    <path d="M20 56 A 24 24 0 0 1 68 56 Z"/>
+    <!-- надрезы -->
+    <path d="M30 52 L36 46 M40 50 L46 42 M50 50 L56 42 M60 52 L66 46" stroke="#1A3A8F" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <!-- надпись КАРАВАЙ -->
+    <text x="84" y="52" font-family="Ubuntu, sans-serif" font-weight="700" font-size="30" letter-spacing="1.2">КАРАВАЙ</text>
+  </g>
+</svg>

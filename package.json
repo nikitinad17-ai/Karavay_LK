@@ -1,0 +1,17 @@
+{
+  "name": "karavay-lk",
+  "version": "3.2.0",
+  "private": true,
+  "description": "Личный кабинет клиента ОАО «КАРАВАЙ» — демо на API КИС (ТЗ ver.2)",
+  "scripts": {
+    "test:ui": "node tests/ui-regression.js",
+    "check": "bash scripts/01-check.sh",
+    "publish-repo": "bash scripts/02-publish.sh",
+    "build": "bash scripts/03-build.sh --no-test",
+    "test": "bash scripts/03-build.sh",
+    "postinstall": "playwright install chromium --with-deps || playwright install chromium || true"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}

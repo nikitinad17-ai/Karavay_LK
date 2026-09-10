@@ -1,0 +1,28 @@
+# Промежуточный результат сборки. Публикуемый файл — index.html в корне.
+app/standalone.html
+
+# Скриншоты и отладочные скрипты
+shots/
+dbg*.js
+*.log
+
+# Зависимости и артефакты окружения
+node_modules
+package-lock.json
+__pycache__/
+*.pyc
+
+# Служебные файлы ОС и редакторов
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Секреты и локальные данные будущего сервера
+.env
+.env.*
+!.env.example
+pb_data/
+*.pem
+*.key
