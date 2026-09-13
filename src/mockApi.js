@@ -1,7 +1,7 @@
 /* Демо-бэкенд v1.9: перехват fetch к /api/*
    Модель:
-   - BUYERS (покупатели, юрлица-плательщики): hasContract, сальдо, shipmentMode, minOrderSum, мастер-пароль
-   - OUTLETS (получатели/точки): ТП, телефон, minOrderSum, пароль точки
+   - BUYERS (покупатели, юрлица-плательщики): hasContract, сальдо, shipmentMode, minOrderSum
+   - OUTLETS (получатели/точки): ТП, телефон, minOrderSum
    v1.9: графики доставки и слоты убраны — дату назначает Каравай (маршрут).
    Все свойства контроля (hasContract, shipmentMode, minOrderSum, deliverySchedule) корректируются на стороне Каравая, в лк-е клиента — read-only.
    Логика блокировки отгрузки (по приоритету):
@@ -9,234 +9,63 @@
    2. shipmentMode="blocked" → причина из shipmentBlockReason
    3. shipmentMode="balance" и balance<0 → «Отрицательное сальдо»
    4. иначе → отгрузка разрешена
-   Логин:
-   - код покупателя + пароль покупателя → доступ ко всем точкам
-   - код точки + пароль покупателя → доступ ко всем точкам покупателя
-   - код точки + пароль точки → доступ только к этой точке
+   Демо-вход: известный обезличенный код + одноразовый ключ, созданный интерфейсом.
 */
+import { PRODUCTS } from './products.js';
+
 (function(){
-  var PRODUCTS = window.__PRODUCTS__ || [];
+  // PRODUCTS теперь приходит из ES-модуля (products.js), а не из window.__PRODUCTS__ —
+  // единственное отличие от vanilla-версии мок-бэкенда, всё остальное 1:1
 
   // ---------- ПОКУПАТЕЛИ (юрлица-плательщики) ----------
   // shipmentMode: "allowed" | "blocked" | "balance"
   //   allowed — отгрузка разрешена
   //   blocked — отгрузка запрещена, заказ уходит в статус "ожидает разблокировки"
   //   balance — проверка по текущему сальдо: если < 0, ведёт себя как blocked
-  var BUYERS = [
-    {
-      id:1, code:"B-1024", name:"АО «ТД «Перекрёсток»»", legal:"АО «ТД «Перекрёсток»»", inn:"7728029110",
-      sinceYear:2019, manager:"Ирина Соколова", managerPhone:"+7 (812) 660-55-11",
-      email:"grazhdansky45@x5.ru", paymentDeferralDays:14,
-      hasContract:true, contractNumber:"ДГ-1-2019", contractDate:"2019-03-14",
-      balance: 214800, shipmentMode:"allowed", minOrderSum: 5000,
-      password:"master1024", segment:"Сеть", badges:["Сеть","Онлайн-заказы"]
-    },
-    {
-      id:2, code:"B-1156", name:"ООО «Хлебница»", legal:"ООО «Хлебница»", inn:"7811502233",
-      sinceYear:2021, manager:"Дмитрий Ежов", managerPhone:"+7 (812) 660-55-11",
-      email:"orders@hlebnitsa.spb.ru", paymentDeferralDays:7,
-      hasContract:true, contractNumber:"ДГ-2-2021", contractDate:"2021-03-14",
-      balance: -8400, shipmentMode:"balance", minOrderSum: 3000,
-      password:"master1156", segment:"Кафе", badges:["HoReCa"]
-    },
-    {
-      id:3, code:"B-1287", name:"ФГАОУ ВО «СПбГЭТУ «ЛЭТИ»»", legal:"ФГАОУ ВО «СПбГЭТУ «ЛЭТИ»»", inn:"7813045593",
-      sinceYear:2018, manager:"Ирина Соколова", managerPhone:"+7 (812) 660-55-11",
-      email:"canteen@etu.ru", paymentDeferralDays:30,
-      hasContract:true, contractNumber:"ДГ-3-2018", contractDate:"2018-03-14",
-      balance: 42300, shipmentMode:"allowed", minOrderSum: 4000,
-      password:"master1287", segment:"Госсектор", badges:["Гос. учреждение","223-ФЗ"]
-    },
-    {
-      id:4, code:"B-1342", name:"ИП Смирнов А. В.", legal:"ИП Смирнов А. В.", inn:"780612345678",
-      sinceYear:2022, manager:"Дмитрий Ежов", managerPhone:"+7 (812) 660-55-11",
-      email:"zakaz@u-doma.ru", paymentDeferralDays:7,
-      hasContract:false, contractNumber:null, contractDate:null,
-      balance: 5100, shipmentMode:"allowed", minOrderSum: 2500,
-      password:"master1342", segment:"Розница", badges:["Новый клиент"]
-    },
-    {
-      id:5, code:"B-1489", name:"ООО «Гурман»", legal:"ООО «Гурман»", inn:"7841998877",
-      sinceYear:2020, manager:"Наталья Кравцова", managerPhone:"+7 (812) 660-55-11",
-      email:"chef@gourmand-spb.ru", paymentDeferralDays:14,
-      hasContract:true, contractNumber:"ДГ-5-2020", contractDate:"2020-03-14",
-      balance: 88650, shipmentMode:"allowed", minOrderSum: 3500,
-      password:"master1489", segment:"Ресторан", badges:["HoReCa","Приоритет"]
-    },
-    {
-      id:6, code:"B-1573", name:"ООО «Север Север»", legal:"ООО «Север Север»", inn:"7838099002",
-      sinceYear:2024, manager:"Дмитрий Ежов", managerPhone:"+7 (812) 660-55-11",
-      email:"office@severnorth.ru", paymentDeferralDays:7,
-      hasContract:true, contractNumber:"ДГ-6-2024", contractDate:"2024-03-14",
-      balance: 12200, shipmentMode:"allowed", minOrderSum: 3000,
-      password:"master1573", segment:"Кофейня", badges:["HoReCa","Ежедневная доставка"]
-    },
-    {
-      id:7, code:"B-1622", name:"ООО «Невский Берег Отель»", legal:"ООО «Невский Берег Отель»", inn:"7842551020",
-      sinceYear:2017, manager:"Наталья Кравцова", managerPhone:"+7 (812) 660-55-11",
-      email:"fnb@nevskybereg.ru", paymentDeferralDays:21,
-      hasContract:true, contractNumber:"ДГ-7-2017", contractDate:"2017-03-14",
-      balance: 156400, shipmentMode:"allowed", minOrderSum: 6000,
-      password:"master1622", segment:"Отель", badges:["HoReCa","Приоритет","Крупный заказ"]
-    },
-    {
-      id:8, code:"B-1704", name:"АО «Торговый дом «Верный»", legal:"АО «Торговый дом «Верный»", inn:"7839022002",
-      sinceYear:2016, manager:"Ирина Соколова", managerPhone:"+7 (812) 660-55-11",
-      email:"pobed@vernyi.ru", paymentDeferralDays:30,
-      hasContract:true, contractNumber:"ДГ-8-2016", contractDate:"2016-03-14",
-      balance: 0, shipmentMode:"blocked", shipmentBlockReason:"Ожидается сверка по актам за июль",
-      minOrderSum: 8000,
-      password:"master1704", segment:"Сеть", badges:["Сеть","Крупный заказ","EDI"], usesEdi:true, ediClientCode:"4601234000158"
-    },
-    {
-      id:9, code:"B-1815", name:"ГБДОУ детский сад № 128", legal:"ГБДОУ детский сад № 128 Калининского района", inn:"7804098871",
-      sinceYear:2013, manager:"Ирина Соколова", managerPhone:"+7 (812) 660-55-11",
-      email:"snab128@edu.gov.spb.ru", paymentDeferralDays:45,
-      hasContract:true, contractNumber:"ДГ-9-2013", contractDate:"2013-03-14",
-      balance: 27500, shipmentMode:"allowed", minOrderSum: 2000,
-      password:"master1815", segment:"Госсектор", badges:["Гос. учреждение","223-ФЗ"]
-    },
-    {
-      id:10, code:"B-1928", name:"ООО «Интернет Решения» (Ozon Fresh)", legal:"ООО «Интернет Решения»", inn:"7704217370",
-      sinceYear:2023, manager:"Наталья Кравцова", managerPhone:"+7 (812) 660-55-11",
-      email:"fresh-spb@ozon.ru", paymentDeferralDays:14,
-      hasContract:true, contractNumber:"ДГ-10-2023", contractDate:"2023-03-14",
-      balance: 74300, shipmentMode:"allowed", minOrderSum: 5000,
-      password:"master1928", segment:"E-commerce", badges:["Маркетплейс","API-заказы"]
-    },
-    {
-      id:11, code:"B-2015", name:"АО «Дикси Юг»", legal:"АО «Дикси Юг»", inn:"5036045205",
-      sinceYear:2020, manager:"Сергей Кулагин", managerPhone:"+7 (812) 660-55-11",
-      email:"spb-fresh@dixy.ru", paymentDeferralDays:21,
-      hasContract:true, contractNumber:"ДГ-11-2020", contractDate:"2020-06-01",
-      balance: 118500, shipmentMode:"allowed", minOrderSum: 6000,
-      password:"master2015", segment:"Сеть", badges:["Сеть","EDI","Ежедневная доставка"], usesEdi:true, ediClientCode:"4601234000165"
-    },
-    {
-      id:12, code:"B-2130", name:"ООО «Агроторг» (Пятёрочка СЗ)", legal:"ООО «Агроторг»", inn:"7825706086",
-      sinceYear:2015, manager:"Ирина Соколова", managerPhone:"+7 (812) 660-55-11",
-      email:"spb-bakery@x5.ru", paymentDeferralDays:30,
-      hasContract:true, contractNumber:"ДГ-12-2015", contractDate:"2015-04-01",
-      balance: 342100, shipmentMode:"allowed", minOrderSum: 8000,
-      password:"master2130", segment:"Сеть", badges:["Сеть","EDI","Крупный заказ"], usesEdi:true, ediClientCode:"4601234000172"
-    },
-    {
-      id:13, code:"B-2244", name:"ООО «Верный СПб»", legal:"ООО «Верный СПб»", inn:"7841077712",
-      sinceYear:2019, manager:"Сергей Кулагин", managerPhone:"+7 (812) 660-55-11",
-      email:"spb.orders@verny.ru", paymentDeferralDays:14,
-      hasContract:true, contractNumber:"ДГ-13-2019", contractDate:"2019-09-10",
-      balance: 67200, shipmentMode:"allowed", minOrderSum: 5000,
-      password:"master2244", segment:"Сеть", badges:["Сеть","Ежедневная доставка"]
-    },
-    {
-      id:14, code:"B-3001", name:"ООО «Балтхлеб-Трейд»", legal:"ООО «Балтхлеб-Трейд»", inn:"7802991177",
-      sinceYear:2024, manager:"Наталья Кравцова", managerPhone:"+7 (812) 660-55-11",
-      email:"office@balthleb-trade.ru", paymentDeferralDays:7,
-      hasContract:true, contractNumber:"ДГ-14-2024", contractDate:"2024-11-05",
-      balance: 14800, shipmentMode:"allowed", minOrderSum: 3000,
-      password:"skryt3001", segment:"Розница", badges:["Приоритет"]
-    },
-    {
-      id:15, code:"B-1467", name:"АО «Тандер» (Магнит)", legal:"АО «Тандер»", inn:"2310031475",
-      sinceYear:2021, manager:"Сергей Кулагин", managerPhone:"+7 (812) 660-55-11",
-      email:"spb-fresh@magnit.ru", paymentDeferralDays:21,
-      hasContract:true, contractNumber:"ДГ-15-2021", contractDate:"2021-05-18",
-      balance: 198600, shipmentMode:"allowed", minOrderSum: 6000,
-      password:"master1467", segment:"Сеть", badges:["Сеть","EDI"], usesEdi:true, ediClientCode:"4601234000189"
-    },
-    {
-      id:16, code:"B-1590", name:"ООО «Лента»", legal:"ООО «Лента»", inn:"7814148471",
-      sinceYear:2022, manager:"Наталья Кравцова", managerPhone:"+7 (812) 660-55-11",
-      email:"spb-bakery@lenta.ru", paymentDeferralDays:30,
-      hasContract:true, contractNumber:"ДГ-16-2022", contractDate:"2022-02-09",
-      balance: 91200, shipmentMode:"allowed", minOrderSum: 7000,
-      password:"master1590", segment:"Сеть", badges:["Сеть","EDI"], usesEdi:true, ediClientCode:"4601234000196"
+  var BUYERS = Array.from({length:16}, function(_, index){
+    var id = index + 1;
+    var blocked = id === 8;
+    var balanceControlled = id === 2;
+    return {
+      id:id, code:"DEMO-B-" + String(id).padStart(2,"0"),
+      name:"Демо-покупатель " + String(id).padStart(2,"0"),
+      legal:"Учебная организация " + String(id).padStart(2,"0"), inn:"ДЕМО",
+      sinceYear:2020, manager:"Демо-менеджер", managerPhone:"+7 (000) 000-00-00",
+      email:"buyer" + id + "@example.invalid", paymentDeferralDays:14,
+      hasContract:id !== 4, contractNumber:id === 4 ? null : "DEMO-" + id, contractDate:id === 4 ? null : "2020-01-01",
+      balance:balanceControlled ? -8400 : id * 10000,
+      shipmentMode:blocked ? "blocked" : (balanceControlled ? "balance" : "allowed"),
+      shipmentBlockReason:blocked ? "Демонстрационная блокировка отгрузки" : undefined,
+      minOrderSum:2500 + (id % 4) * 1500, segment:"Демо", badges:["Учебные данные"],
+      usesEdi:id === 15 || id === 16, ediClientCode:id === 15 || id === 16 ? "DEMO-EDI-" + id : undefined
+    };
+  });
+
+  // Без персональных и договорных данных: структура и масштаб сохранены для UI-тестов.
+  var OUTLET_COUNTS = [4,1,1,1,1,3,2,4,1,2,3,3,2,1,2,1];
+  var OUTLETS = [];
+  BUYERS.forEach(function(buyer, buyerIndex){
+    var count = OUTLET_COUNTS[buyerIndex];
+    for(var number=1; number<=count; number++){
+      var id = buyer.id * 100 + number;
+      OUTLETS.push({
+        id:id, platform:["karavay","kush","zarya"][id % 3], buyerId:buyer.id,
+        code:"DEMO-O-" + String(id).padStart(4,"0"),
+        name:"Демо-точка " + String(id).padStart(4,"0"),
+        address:"Учебный адрес, точка " + id, phones:["+7 (000) 000-00-00"],
+        deliverySchedule:[[7],[7],[7],[7],[7],[],[]],
+        rep:"Демо-представитель", repPhone:"+7 (000) 000-00-00",
+        minOrderSum:buyer.minOrderSum, receiver:"Демо-получатель"
+      });
     }
-  ];
-
-  // ---------- ТОЧКИ (получатели) ----------
-  // password: пароль только для входа на эту точку
-  // rep: свой торговый представитель точки
-  // minOrderSum: если задана — переопределяет minOrderSum покупателя
-  // deliverySchedule: массив 7 элементов по дням недели [Пн,Вт,Ср,Чт,Пт,Сб,Вс].
-  //                   Каждый элемент — массив часов начала слота (0..23). Слот длится 1 час: [7] → «07:00–08:00».
-  //                   [] — в этот день доставки нет. Максимум 6 слотов в день.
-  var OUTLETS = [
-    // Перекрёсток (id:1) — сеть, 4 точки
-    // П-01: автомагазин, 2 доставки/день ПнСрПт (утро + день)
-    {id:101, platform:"karavay", buyerId:1, code:"P-1024-01", name:"Пятёрочка, пр. Гражданский, 45", address:"СПб, пр. Гражданский, 45", phones:["+7 (812) 555-10-11"], deliverySchedule:[[7,13],[7,13],[7,13],[7,13],[7,13],[],[]], rep:"Ольга Тимофеева", repPhone:"+7 (921) 900-10-11", password:"grz2026", minOrderSum:5000, receiver:"Морозова Е. В."},
-    {id:102, platform:"kush", buyerId:1, code:"P-1024-02", name:"Пятёрочка, ул. Есенина, 18", address:"СПб, ул. Есенина, 18", phones:["+7 (812) 555-10-12"], deliverySchedule:[[7],[7],[7],[7],[7],[],[]], rep:"Ольга Тимофеева", repPhone:"+7 (921) 900-10-11", password:"esn2026", minOrderSum:5000, receiver:"Иванов К. С."},
-    // П-03: большой магазин, 3 доставки в будни, 2 в Сб
-    {id:103, platform:"zarya", buyerId:1, code:"P-1024-03", name:"Пятёрочка, пр. Ветеранов, 90", address:"СПб, пр. Ветеранов, 90", phones:["+7 (812) 555-10-13"], deliverySchedule:[[6,11,16],[6,11,16],[6,11,16],[6,11,16],[6,11,16],[7,13],[]], rep:"Сергей Кулагин", repPhone:"+7 (921) 900-10-14", password:"vet2026", minOrderSum:6000, receiver:"Петрова А. Н."},
-    {id:104, platform:"karavay", buyerId:1, code:"P-1024-04", name:"Пятёрочка, ул. Савушкина, 112", address:"СПб, ул. Савушкина, 112", phones:["+7 (812) 555-10-14"], deliverySchedule:[[7,14],[7,14],[7,14],[7,14],[7,14],[],[]], rep:"Сергей Кулагин", repPhone:"+7 (921) 900-10-14", password:"sav2026", minOrderSum:5000, receiver:"Смирнова О. И."},
-
-    // Хлебница (id:2) — 1 точка, кафе — встречает утром только
-    {id:201, platform:"kush", buyerId:2, code:"H-1156-01", name:"Кафе «Хлебница», Марата, 20", address:"СПб, ул. Марата, 20", phones:["+7 (812) 555-11-56"], deliverySchedule:[[],[7],[],[7],[],[7],[]], rep:"Дмитрий Ежов", repPhone:"+7 (812) 660-55-11", password:"marata2026", minOrderSum:3000, receiver:"Кузнецова Л. П."},
-
-    // ЛЭТИ (id:3) — 1 точка, столовая — утром до завтрака
-    {id:301, platform:"zarya", buyerId:3, code:"L-1287-01", name:"Столовая ЛЭТИ, Профессора Попова, 5", address:"СПб, ул. Профессора Попова, 5", phones:["+7 (812) 234-27-87"], deliverySchedule:[[7],[7],[7],[7],[7],[],[]], rep:"Ирина Соколова", repPhone:"+7 (812) 660-55-11", password:"leti2026", minOrderSum:4000, receiver:"Никитин Д. Е."},
-
-    // У дома (id:4) — 1 точка, одна доставка Пн/Пт утром (без договора!)
-    {id:401, platform:"karavay", buyerId:4, code:"U-1342-01", name:"Магазин «У дома», Есенина, 12", address:"СПб, ул. Есенина, 12", phones:["+7 (812) 555-13-42"], deliverySchedule:[[8],[],[],[],[8],[],[]], rep:"Дмитрий Ежов", repPhone:"+7 (812) 660-55-11", password:"udoma2026", minOrderSum:2500, receiver:"Смирнов А. В."},
-
-    // Гурман (id:5) — 1 точка, ресторан, 2 доставки ВтЧтСб (утро и к вечеру)
-    {id:501, platform:"kush", buyerId:5, code:"G-1489-01", name:"Ресторан «Гурман», Невский, 88", address:"СПб, Невский пр., 88", phones:["+7 (812) 555-14-89"], deliverySchedule:[[],[9,16],[],[9,16],[],[9,16],[]], rep:"Наталья Кравцова", repPhone:"+7 (812) 660-55-11", password:"nevsky2026", minOrderSum:3500, receiver:"Гурянов И. С."},
-
-    // Север Север (id:6) — 3 кофейни, ежедневно по 3–4 доставки
-    // С-01: МАКС 6 слотов в день (топовая точка, большая проходимость)
-    {id:601, platform:"zarya", buyerId:6, code:"S-1573-01", name:"«Север Север», Сенная пл., 3", address:"СПб, Сенная пл., 3", phones:["+7 (812) 555-15-73"], deliverySchedule:[[6,9,12,15,18],[6,9,12,15,18],[6,9,12,15,18],[6,9,12,15,18],[6,9,12,15,18,20],[7,11,15,18],[8,13,17]], rep:"Дмитрий Ежов", repPhone:"+7 (812) 660-55-11", password:"sennaya2026", minOrderSum:2500, receiver:"Юрьева М. К."},
-    {id:602, platform:"karavay", buyerId:6, code:"S-1573-02", name:"«Север Север», ул. Рубинштейна, 15", address:"СПб, ул. Рубинштейна, 15", phones:["+7 (812) 555-15-74"], deliverySchedule:[[7,12,16],[7,12,16],[7,12,16],[7,12,16],[7,12,16,19],[9,14,17],[10,15]], rep:"Дмитрий Ежов", repPhone:"+7 (812) 660-55-11", password:"rub2026", minOrderSum:2500, receiver:"Панин С. О."},
-    {id:603, platform:"kush", buyerId:6, code:"S-1573-03", name:"«Север Север», Приморский пр., 62", address:"СПб, Приморский пр., 62", phones:["+7 (812) 555-15-75"], deliverySchedule:[[7,13,17],[7,13,17],[7,13,17],[7,13,17],[7,13,17],[9,14],[10]], rep:"Сергей Кулагин", repPhone:"+7 (921) 900-10-14", password:"prim2026", minOrderSum:3000, receiver:"Осипова Т. В."},
-
-    // Невский Берег (id:7) — 2 отеля, завтрак+ужин
-    {id:701, platform:"karavay", buyerId:7, code:"N-1622-01", name:"Отель «Невский Берег», Мойка, 82", address:"СПб, наб. реки Мойки, 82", phones:["+7 (812) 555-16-22"], deliverySchedule:[[6,17],[6,17],[6,17],[6,17],[6,17],[6,17],[7,17]], rep:"Наталья Кравцова", repPhone:"+7 (812) 660-55-11", password:"moyka2026", minOrderSum:6000, receiver:"Дементьева О. С."},
-    {id:702, platform:"kush", buyerId:7, code:"N-1622-02", name:"Отель «Невский Берег», Гончарная, 4", address:"СПб, ул. Гончарная, 4", phones:["+7 (812) 555-16-23"], deliverySchedule:[[6,17],[6,17],[6,17],[6,17],[6,17],[6,17],[7,17]], rep:"Наталья Кравцова", repPhone:"+7 (812) 660-55-11", password:"gonch2026", minOrderSum:6000, receiver:"Костина Р. И."},
-
-    // Верный (id:8) — сеть, 4 точки, у покупателя shipment=blocked
-    // РЦ Кудрово — крупный склад, много окон приёма
-    {id:801, platform:"kush", buyerId:8, code:"V-1704-01", name:"«Верный», РЦ Кудрово (V1)", address:"ЛО, Кудрово, РЦ «V1»", phones:["+7 (812) 555-17-04"], deliverySchedule:[[4,7,10,14,18],[4,7,10,14,18],[4,7,10,14,18],[4,7,10,14,18],[4,7,10,14,18],[5,9,14],[6,12]], rep:"Ирина Соколова", repPhone:"+7 (812) 660-55-11", password:"kud2026", minOrderSum:10000, receiver:"Логистика РЦ"},
-    {id:802, platform:"zarya", buyerId:8, code:"V-1704-02", name:"«Верный», Комендантский пр., 17", address:"СПб, Комендантский пр., 17", phones:["+7 (812) 555-17-05"], deliverySchedule:[[7,14],[7,14],[7,14],[7,14],[7,14],[8,14],[9]], rep:"Ирина Соколова", repPhone:"+7 (812) 660-55-11", password:"kmnd2026", minOrderSum:8000, receiver:"Волкова Н. А."},
-    {id:803, platform:"karavay", buyerId:8, code:"V-1704-03", name:"«Верный», пр. Науки, 14", address:"СПб, пр. Науки, 14", phones:["+7 (812) 555-17-06"], deliverySchedule:[[7,14],[7,14],[7,14],[7,14],[7,14],[8,14],[9]], rep:"Ольга Тимофеева", repPhone:"+7 (921) 900-10-11", password:"nauki2026", minOrderSum:8000, receiver:"Тихонов И. Р."},
-    {id:804, platform:"kush", buyerId:8, code:"V-1704-04", name:"«Верный», Ленинский пр., 100", address:"СПб, Ленинский пр., 100", phones:["+7 (812) 555-17-07"], deliverySchedule:[[7,14],[7,14],[7,14],[7,14],[7,14],[8,14],[9]], rep:"Сергей Кулагин", repPhone:"+7 (921) 900-10-14", password:"lenin2026", minOrderSum:8000, receiver:"Захарова М. Т."},
-
-    // Детский сад (id:9) — 1 точка, только будни утром до завтрака
-    {id:901, platform:"zarya", buyerId:9, code:"D-1815-01", name:"Детский сад №128, Гражданская, 14", address:"СПб, ул. Гражданская, 14", phones:["+7 (812) 555-18-15"], deliverySchedule:[[7],[7],[7],[7],[7],[],[]], rep:"Ирина Соколова", repPhone:"+7 (812) 660-55-11", password:"sad2026", minOrderSum:2000, receiver:"Завхоз Тарасова Е."},
-
-    // Ozon Fresh (id:10) — 2 тёмные кухни, Пн–Сб, 4 доставки/день
-    {id:1001, platform:"karavay", buyerId:10, code:"O-1928-01", name:"Ozon Fresh, пр. Энергетиков, 25К4", address:"СПб, пр. Энергетиков, 25К4", phones:["+7 (812) 555-19-28"], deliverySchedule:[[5,10,14,19],[5,10,14,19],[5,10,14,19],[5,10,14,19],[5,10,14,19],[6,11,15,19],[]], rep:"Наталья Кравцова", repPhone:"+7 (812) 660-55-11", password:"energ2026", minOrderSum:5000, receiver:"Оператор смены"},
-    {id:1002, platform:"kush", buyerId:10, code:"O-1928-02", name:"Ozon Fresh, ул. Софийская, 8", address:"СПб, ул. Софийская, 8", phones:["+7 (812) 555-19-29"], deliverySchedule:[[5,10,14,19],[5,10,14,19],[5,10,14,19],[5,10,14,19],[5,10,14,19],[6,11,15,19],[]], rep:"Наталья Кравцова", repPhone:"+7 (812) 660-55-11", password:"sof2026", minOrderSum:5000, receiver:"Оператор смены"},
-
-    // Дикси (id:11) — 3 точки, ежедневно 2 доставки
-    {id:1101, platform:"kush", buyerId:11, code:"D-2015-01", name:"Дикси, Ленсовета, 92", address:"СПб, ул. Ленсовета, 92", phones:["+7 (812) 555-20-15"], deliverySchedule:[[6,14],[6,14],[6,14],[6,14],[6,14],[7,14],[]], rep:"Сергей Кулагин", repPhone:"+7 (921) 900-10-14", password:"lens2026", minOrderSum:6000, receiver:"Журавлёв Я. М."},
-    {id:1102, platform:"zarya", buyerId:11, code:"D-2015-02", name:"Дикси, Заневский пр., 65", address:"СПб, Заневский пр., 65", phones:["+7 (812) 555-20-16"], deliverySchedule:[[6,14],[6,14],[6,14],[6,14],[6,14],[7,14],[]], rep:"Сергей Кулагин", repPhone:"+7 (921) 900-10-14", password:"zan2026", minOrderSum:6000, receiver:"Мамедова Г. И."},
-    {id:1103, platform:"karavay", buyerId:11, code:"D-2015-03", name:"Дикси, Народного Ополчения, 30", address:"СПб, Народного Ополчения, 30", phones:["+7 (812) 555-20-17"], deliverySchedule:[[6,14],[6,14],[6,14],[6,14],[6,14],[],[]], rep:"Сергей Кулагин", repPhone:"+7 (921) 900-10-14", password:"nar2026", minOrderSum:6000, receiver:"Кальков А. С."},
-
-    // Агроторг / Пятёрочка СЗ (id:12) — 3 точки, будни 3 доставки
-    {id:1201, platform:"zarya", buyerId:12, code:"P-2130-01", name:"Пятёрочка, Комендантский, 22", address:"СПб, Комендантский пр., 22", phones:["+7 (812) 555-21-30"], deliverySchedule:[[5,11,16],[5,11,16],[5,11,16],[5,11,16],[5,11,16],[6,12],[]], rep:"Ольга Тимофеева", repPhone:"+7 (921) 900-10-11", password:"kom2026", minOrderSum:8000, receiver:"Лобанов С. В."},
-    {id:1202, platform:"karavay", buyerId:12, code:"P-2130-02", name:"Пятёрочка, Бухарестская, 74", address:"СПб, ул. Бухарестская, 74", phones:["+7 (812) 555-21-31"], deliverySchedule:[[5,11,16],[5,11,16],[5,11,16],[5,11,16],[5,11,16],[6,12],[]], rep:"Ольга Тимофеева", repPhone:"+7 (921) 900-10-11", password:"buh2026", minOrderSum:8000, receiver:"Киреева О. А."},
-    {id:1203, platform:"kush", buyerId:12, code:"P-2130-03", name:"Пятёрочка, Культуры, 21", address:"СПб, пр. Культуры, 21", phones:["+7 (812) 555-21-32"], deliverySchedule:[[5,11,16],[5,11,16],[5,11,16],[5,11,16],[5,11,16],[6,12],[]], rep:"Ольга Тимофеева", repPhone:"+7 (921) 900-10-11", password:"kult2026", minOrderSum:8000, receiver:"Савельев И. Н."},
-
-    // Верный (id:13) — 2 точки
-    {id:1301, platform:"karavay", buyerId:13, code:"V-2244-01", name:"Верный, Космонавтов, 47", address:"СПб, пр. Космонавтов, 47", phones:["+7 (812) 555-22-44"], deliverySchedule:[[7,14],[7,14],[7,14],[7,14],[7,14],[8,13],[]], rep:"Сергей Кулагин", repPhone:"+7 (921) 900-10-14", password:"kos2026", minOrderSum:5000, receiver:"Гончарова Т. М."},
-    {id:1302, platform:"kush", buyerId:13, code:"V-2244-02", name:"Верный, Московский, 208", address:"СПб, Московский пр., 208", phones:["+7 (812) 555-22-45"], deliverySchedule:[[7,14],[7,14],[7,14],[7,14],[7,14],[8,13],[]], rep:"Сергей Кулагин", repPhone:"+7 (921) 900-10-14", password:"mos2026", minOrderSum:5000, receiver:"Кочетков В. С."},
-
-    // Балтхлеб-Трейд (id:14) — скрытый клиент, 1 точка
-    {id:1401, platform:"kush", buyerId:14, code:"K-3001-01", name:"Магазин «Свежая выпечка», Лесной, 41", address:"СПб, Лесной пр., 41", phones:["+7 (812) 555-30-01"], deliverySchedule:[[7],[],[7],[],[7],[7],[]], rep:"Наталья Кравцова", repPhone:"+7 (812) 660-55-11", password:"lesn2026", minOrderSum:3000, receiver:"Зав. магазином Новиков П."},
-
-    // Тандер / Магнит (id:15) — EDI-клиент, но иногда заказывает и через кабинет
-    {id:1501, platform:"karavay", buyerId:15, code:"M-1467-01", name:"Магнит, Среднеохтинский пр., 30", address:"СПб, Среднеохтинский пр., 30", phones:["+7 (812) 555-14-67"], deliverySchedule:[[6,12],[6,12],[6,12],[6,12],[6,12],[7,13],[]], rep:"Сергей Кулагин", repPhone:"+7 (921) 900-10-14", password:"magn2026", minOrderSum:6000, receiver:"Макарова Е. В."},
-    {id:1502, platform:"kush", buyerId:15, code:"M-1467-02", name:"Магнит, дальневосточный, 71", address:"СПб, дальневосточный пр., 71", phones:["+7 (812) 555-14-68"], deliverySchedule:[[6,12],[6,12],[6,12],[6,12],[6,12],[7,13],[]], rep:"Сергей Кулагин", repPhone:"+7 (921) 900-10-14", password:"dalnv2026", minOrderSum:6000, receiver:"Соколова И. Н."},
-
-    // Лента (id:16) — EDI-клиент, но иногда заказывает и через кабинет
-    {id:1601, platform:"zarya", buyerId:16, code:"T-1590-01", name:"Лента, Светлановский пр., 118", address:"СПб, Светлановский пр., 118", phones:["+7 (812) 555-15-90"], deliverySchedule:[[5,13],[5,13],[5,13],[5,13],[5,13],[6,14],[]], rep:"Наталья Кравцова", repPhone:"+7 (812) 660-55-11", password:"lenta2026", minOrderSum:7000, receiver:"Григорьева Н. П."}
-  ];
+  });
 
   // Справочники для UI
   // Площадки отгрузки и телефоны диспетчерской (заглушки — заполнить актуальными номерами)
   var PLATFORMS = {
-    kush:    {name:"Кушелевка", phone:"+7 (812) 000-00-01"},
-    zarya:   {name:"Заря",      phone:"+7 (812) 000-00-02"},
-    karavay: {name:"Каравай",   phone:"+7 (812) 000-00-03"}
+    kush:    {name:"Кушелевка", phone:"+7 (000) 000-00-01"},
+    zarya:   {name:"Заря",      phone:"+7 (000) 000-00-02"},
+    karavay: {name:"Каравай",   phone:"+7 (000) 000-00-03"}
   };
 
   // ===== v2.0: модель КИС (ТЗ «Личный кабинет клиента» ver.2) =====
@@ -330,6 +159,14 @@
     var row = (MATRIX[Number(outletId)] || []).find(function(r){ return r.id_prd === Number(idPrd); });
     return row || null;
   }
+  function quantityRuleError(row, qty){
+    var q = Number(qty), perLot = Number(row && row.KolUkl) || 1;
+    if(!Number.isInteger(q) || q <= 0) return "Количество должно быть целым и больше нуля";
+    var minimum = row.KolshtOrdmin == null ? perLot : Math.max(1, Number(row.KolshtOrdmin) || 1);
+    if(q < minimum) return "Минимальное количество для товара " + row.KodProd + ": " + minimum + " шт.";
+    if(row.KolshtOrdmin == null && q % perLot !== 0) return "Товар " + row.KodProd + " отгружается только лотками по " + perLot + " шт.";
+    return "";
+  }
 
   // ---------- ОГРАНИЧЕНИЯ ПО ДНЯМ НЕДЕЛИ ----------
   // В КИС приходит ClientDayOfWeek. Демо-данные выводим из старого графика точки.
@@ -400,6 +237,15 @@
       lk_shipmentEffective: eff.state,
       lk_shipmentEffectiveReason: eff.reason,
       lk_shipmentEffectiveCause: eff.cause || null,
+      // -- баг, унаследованный от vanilla-версии: эти поля нужны Профилю,
+      // но adaptPayer их не читал, т.к. payerKIS их не отдавал вовсе --
+      lk_email: b.email || null,
+      lk_sinceYear: b.sinceYear || null,
+      lk_shipmentMode: b.shipmentMode || null,
+      lk_shipmentBlockReason: b.shipmentBlockReason || null,
+      lk_usesEdi: !!b.usesEdi,
+      lk_ediClientCode: b.ediClientCode || null,
+      lk_badges: b.badges || [],
       Clients: outletsOfBuyer(b.id).map(clientKIS)
     };
   }
@@ -459,7 +305,9 @@
           Kolsht: it.Kolsht,
           KolVzv: it.KolVzv || 0,
           SumAll: round2(it.CenaOTP * it.Kolsht),
-          lk_KolUkl: it.KolUkl || 1
+          lk_KolUkl: it.KolUkl || 1,
+          lk_minOrder: (priceFor(o.outletId, it.id_prd) || {}).KolshtOrdmin,
+          lk_lotOnly: (priceFor(o.outletId, it.id_prd) || {}).KolshtOrdmin == null
         };
       })
     };
@@ -598,36 +446,27 @@
     if (path === "/api/login" && method === "POST") {
       var b0 = body();
       var code = norm(b0.code);
-      var pass = String(b0.password||"");
+      var hasDemoKey = Boolean(String(b0.password||""));
 
-      // 1) код покупателя + мастер-пароль → доступ ко всем точкам
+      // Демо-контур проверяет известный код и наличие одноразового ключа из UI.
+      // Реальные учётные данные здесь намеренно не хранятся.
       var buyerByCode = findBuyerByCode(code);
-      if(buyerByCode && pass === buyerByCode.password){
+      if(buyerByCode && hasDemoKey){
         return Promise.resolve(jsonResp({
           role:"buyer", scope:"all-outlets",
           payer: payerKIS(buyerByCode)
         }));
       }
 
-      // 2) код точки + мастер-пароль покупателя → доступ ко всем точкам покупателя
-      // 3) код точки + пароль точки → доступ только к этой точке
+      // Код точки открывает роль получателя только для этой точки.
       var outlet = findOutletByCode(code);
-      if(outlet){
+      if(outlet && hasDemoKey){
         var buyer = findBuyer(outlet.buyerId);
-        if(buyer && pass === buyer.password){
-          return Promise.resolve(jsonResp({
-            role:"buyer", scope:"all-outlets",
-            payer: payerKIS(buyer),
-            enteredOutletId: outlet.id
-          }));
-        }
-        if(pass === outlet.password){
-          return Promise.resolve(jsonResp({
-            role:"outlet", scope:"single-outlet",
-            payer: payerKIS(buyer),
-            client: clientKIS(outlet)
-          }));
-        }
+        return Promise.resolve(jsonResp({
+          role:"outlet", scope:"single-outlet",
+          payer: payerKIS(buyer),
+          client: clientKIS(outlet)
+        }));
       }
 
       return Promise.resolve(jsonResp({error:"invalid_credentials"}, 401));
@@ -784,6 +623,10 @@
         };
       }).filter(function(x){ return x && x.Kolsht > 0; });
       if(!nItems.length) return Promise.resolve(jsonResp({detail:"Некорректный параметр Product"}, 400));
+      var invalidN = nItems.find(function(it){ return quantityRuleError(priceFor(nOut.id, it.id_prd), it.Kolsht); });
+      if(invalidN){
+        return Promise.resolve(jsonResp({detail:quantityRuleError(priceFor(nOut.id, invalidN.id_prd), invalidN.Kolsht), lk_error:"invalid_quantity"}, 422));
+      }
       // все позиции заказа должны быть из одной группы
       var grpSet = {};
       nItems.forEach(function(it){
@@ -858,6 +701,10 @@
         };
       }).filter(function(x){ return x && x.Kolsht > 0; });
       if(!uItems.length) return Promise.resolve(jsonResp({detail:"Некорректный параметр Product"}, 400));
+      var invalidU = uItems.find(function(it){ return quantityRuleError(priceFor(uOrd.outletId, it.id_prd), it.Kolsht); });
+      if(invalidU){
+        return Promise.resolve(jsonResp({detail:quantityRuleError(priceFor(uOrd.outletId, invalidU.id_prd), invalidU.Kolsht), lk_error:"invalid_quantity"}, 422));
+      }
       var uBuyer = findBuyer(uOrd.buyerId);
       var uSum = round2(uItems.reduce(function(a,c){ return a + c.CenaOTP*c.Kolsht; }, 0));
       var uMin = (uOut.minOrderSum != null ? uOut.minOrderSum : uBuyer.minOrderSum) || 0;
