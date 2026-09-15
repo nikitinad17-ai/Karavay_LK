@@ -1,15 +1,19 @@
 {
   "name": "karavay-lk-react",
   "private": true,
-  "version": "3.3.0",
+  "version": "3.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:demo": "vite build --mode demo --outDir=dist-demo",
+    "build:pocketbase-test": "vite build --mode pocketbase --base=/ --outDir=dist-pocketbase",
+    "build:standalone": "vite build --mode demo --base=./ --outDir=standalone-dist && node scripts/build-standalone.mjs",
     "preview": "vite preview",
-    "test": "node --test tests/*.test.mjs && vitest run",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "test:e2e": "playwright test",
-    "check": "npm run test && npm run build"
+    "check": "npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -20,9 +24,13 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
-    "@vitejs/plugin-react": "^4.3.1",
-    "jsdom": "^25.0.1",
-    "vite": "^5.4.8",
-    "vitest": "^2.1.9"
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/node": "^24.3.1",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.0.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
   }
 }

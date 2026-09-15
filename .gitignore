@@ -1,5 +1,12 @@
 node_modules/
 dist/
+dist-demo/
+dist-pocketbase/
+standalone-dist/
+artifacts/
 test-results/
 playwright-report/
+.vitest/
+.env.local
+.env.*.local
 .DS_Store

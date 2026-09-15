@@ -1,0 +1,296 @@
+openapi: 3.1.0
+info:
+  title: КАРАВАЙ — API личного кабинета
+  version: 1.0.0-stage2
+  description: Клиентский контракт бизнес-данных. Авторизация выполняется PocketBase Bearer-токеном.
+servers:
+  - url: /api/v1
+security:
+  - pocketBaseToken: []
+paths:
+  /payers/{id_pay}:
+    get:
+      operationId: getPayer
+      parameters:
+        - $ref: '#/components/parameters/IdPay'
+      responses:
+        '200':
+          description: Покупатель
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payer' }
+        '204': { description: Покупатель не найден }
+        default: { $ref: '#/components/responses/Error' }
+  /payers/{id_pay}/clients:
+    get:
+      operationId: getPayerClients
+      parameters:
+        - $ref: '#/components/parameters/IdPay'
+      responses:
+        '200':
+          description: Получатели покупателя
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [Id_pay, Clients]
+                properties:
+                  Id_pay: { type: integer }
+                  Clients:
+                    type: array
+                    items: { $ref: '#/components/schemas/Client' }
+        '204': { description: Покупатель не найден }
+        default: { $ref: '#/components/responses/Error' }
+  /payers/{id_pay}/orders:
+    get:
+      operationId: getPayerOrders
+      parameters:
+        - $ref: '#/components/parameters/IdPay'
+        - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Заказы за 14 дней и все незавершённые
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Orders' }
+        '204': { description: Заказов нет }
+        default: { $ref: '#/components/responses/Error' }
+  /clients/{id_clt}:
+    get:
+      operationId: getClient
+      parameters:
+        - $ref: '#/components/parameters/IdClient'
+      responses:
+        '200':
+          description: Получатель
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Client' }
+        default: { $ref: '#/components/responses/Error' }
+  /clients/{id_clt}/matrix:
+    get:
+      operationId: getClientMatrix
+      parameters:
+        - $ref: '#/components/parameters/IdClient'
+        - { name: DateOrd, in: query, required: true, schema: { type: integer, description: Unix timestamp } }
+        - { name: Group, in: query, required: true, schema: { type: integer, enum: [0, 1] } }
+      responses:
+        '200':
+          description: Матрица продукции с ценами
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Matrix' }
+        default: { $ref: '#/components/responses/Error' }
+  /clients/{id_clt}/orders:
+    get:
+      operationId: getClientOrders
+      parameters:
+        - $ref: '#/components/parameters/IdClient'
+        - { name: last, in: query, schema: { type: integer, enum: [1] } }
+      responses:
+        '200':
+          description: Заказы получателя
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Orders' }
+        '204': { description: Заказов нет }
+        default: { $ref: '#/components/responses/Error' }
+  /orders:
+    post:
+      operationId: createOrder
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderMutation' }
+      responses:
+        '200':
+          description: Созданный заказ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        default: { $ref: '#/components/responses/Error' }
+  /orders/{id_ord}:
+    parameters:
+      - $ref: '#/components/parameters/IdOrder'
+    get:
+      operationId: getOrder
+      responses:
+        '200':
+          description: Детализация заказа
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderDetails' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      operationId: updateOrder
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderMutation' }
+      responses:
+        '200':
+          description: Результат обновления
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: cancelOrder
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Заказ отменён
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        default: { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    pocketBaseToken:
+      type: http
+      scheme: bearer
+      bearerFormat: PocketBase JWT
+  parameters:
+    IdPay: { name: id_pay, in: path, required: true, schema: { type: integer } }
+    IdClient: { name: id_clt, in: path, required: true, schema: { type: integer } }
+    IdOrder: { name: id_ord, in: path, required: true, schema: { type: integer } }
+    RequestId: { name: X-Request-ID, in: header, required: true, schema: { type: string } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+  responses:
+    Error:
+      description: Ошибка запроса
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail: { type: string }
+        code: { type: string }
+        requestId: { type: string }
+        fieldErrors: { type: object, additionalProperties: { type: string } }
+        meta: { type: object }
+      additionalProperties: false
+    Payer:
+      type: object
+      required: [Id_pay, KodPay, NamePay, Clients]
+      properties:
+        Id_pay: { type: integer }
+        KodPay: { type: string }
+        NamePay: { type: string }
+        Adres: { type: string }
+        NamePRV: { type: string }
+        SumOutSaldoCalc: { type: number }
+        OrdLimitMinSum: { type: number, minimum: 0 }
+        Manager: { type: [string, 'null'] }
+        Clients:
+          type: array
+          items: { $ref: '#/components/schemas/Client' }
+      additionalProperties: true
+    Client:
+      type: object
+      required: [Id_pay, id_clt, KodClt, NameClt, Adres]
+      properties:
+        Id_pay: { type: integer }
+        id_clt: { type: integer }
+        KodClt: { type: string }
+        NameClt: { type: string }
+        Adres: { type: string }
+        OrdLimitMinSum: { type: number, minimum: 0 }
+        TorgPred: { type: [string, 'null'] }
+        ClientDayOfWeek: { type: [string, array], items: { type: string } }
+      additionalProperties: true
+    Product:
+      type: object
+      required: [id_prd, KodProd, NameProd, KolUkl, CenaOTP, Group]
+      properties:
+        id_prd: { type: integer }
+        KodProd: { type: string }
+        NameProd: { type: string }
+        KolUkl: { type: integer, minimum: 1 }
+        KolshtOrdmin: { type: [integer, 'null'], minimum: 1 }
+        CenaOTP: { type: number, minimum: 0 }
+        BaseCenaOTP: { type: number, minimum: 0 }
+        Group: { type: integer, enum: [0, 1] }
+        MarketingGroup: { type: string }
+      additionalProperties: true
+    Matrix:
+      type: object
+      required: [id_clt, DateOrd, Group, Product]
+      properties:
+        id_clt: { type: integer }
+        DateOrd: { type: integer }
+        Group: { type: integer, enum: [0, 1] }
+        Product:
+          type: array
+          items: { $ref: '#/components/schemas/Product' }
+    OrderItemInput:
+      type: object
+      required: [Id_prd, KolSht]
+      properties:
+        Id_prd: { type: integer }
+        KolSht: { type: integer, minimum: 1 }
+      additionalProperties: false
+    OrderMutation:
+      type: object
+      required: [Id_clt, DateOrd, Product]
+      properties:
+        Id_clt: { type: integer }
+        DateOrd: { type: integer }
+        Product:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/OrderItemInput' }
+      additionalProperties: false
+    Order:
+      type: object
+      required: [Id_ord, State]
+      properties:
+        Id_ord: { type: integer }
+        NumOrd: { type: integer }
+        id_clt: { type: integer }
+        DateOrdClt: { type: integer }
+        DateOrd: { type: integer }
+        Group: { type: integer, enum: [0, 1] }
+        KolSht: { type: integer, minimum: 0 }
+        SumAll: { type: number, minimum: 0 }
+        State: { type: string }
+      additionalProperties: true
+    Orders:
+      type: object
+      required: [Orders]
+      properties:
+        id_pay: { type: integer }
+        id_clt: { type: integer }
+        lk_total: { type: integer, minimum: 0 }
+        Orders:
+          type: array
+          items: { $ref: '#/components/schemas/Order' }
+      additionalProperties: false
+    OrderDetails:
+      type: object
+      required: [id_ord, Group, Product]
+      properties:
+        id_ord: { type: integer }
+        Group: { type: integer, enum: [0, 1] }
+        Product:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Product'
+              - type: object
+                properties:
+                  Kolsht: { type: integer, minimum: 1 }
+                  KolVzv: { type: integer, minimum: 0 }
+                  SumAll: { type: number, minimum: 0 }
