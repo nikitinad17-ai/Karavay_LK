@@ -11,6 +11,27 @@ export interface PocketBaseSession {
   kisCode: string;
 }
 
+export interface PocketBaseRecord {
+  id?: unknown;
+  active?: boolean;
+  kis_code?: unknown;
+  kis_id?: unknown;
+  name?: unknown;
+  address?: unknown;
+  buyer?: unknown;
+  min_order_sum?: unknown;
+  manager?: unknown;
+  manager_phone?: unknown;
+  inn?: unknown;
+  contact_email?: unknown;
+  must_change_password?: boolean;
+}
+
+export interface PocketBaseAuthResult {
+  session: PocketBaseSession;
+  record: PocketBaseRecord;
+}
+
 export interface StorageLike {
   getItem: (key: string) => string | null;
   setItem: (key: string, value: string) => void;
@@ -28,12 +49,6 @@ export interface AuthOptions {
 interface RequiredAuthOptions {
   config: RuntimeConfig;
   fetchImpl: FetchLike;
-}
-
-interface PocketBaseRecord {
-  active?: boolean;
-  kis_code?: unknown;
-  must_change_password?: boolean;
 }
 
 interface PocketBasePayload {
@@ -139,7 +154,7 @@ async function authenticateCollection(
   return payload;
 }
 
-function sessionFromPayload(payload: PocketBasePayload, collection: string, config: RuntimeConfig): PocketBaseSession {
+function authResultFromPayload(payload: PocketBasePayload, collection: string, config: RuntimeConfig): PocketBaseAuthResult {
   const record = payload.record;
   if (!record || typeof payload.token !== 'string') {
     throw new AuthError('INVALID_RESPONSE', 'PocketBase вернул неполный ответ авторизации.');
@@ -149,10 +164,13 @@ function sessionFromPayload(payload: PocketBasePayload, collection: string, conf
     throw new AuthError('PASSWORD_CHANGE_REQUIRED', 'Для учётной записи требуется смена временного пароля.', 403);
   }
   return {
-    token: payload.token,
-    collection,
-    role: collection === config.buyersCollection ? 'buyer' : 'outlet',
-    kisCode: String(record.kis_code || '').trim(),
+    session: {
+      token: payload.token,
+      collection,
+      role: collection === config.buyersCollection ? 'buyer' : 'outlet',
+      kisCode: String(record.kis_code || '').trim(),
+    },
+    record,
   };
 }
 
@@ -184,7 +202,7 @@ export function clearPocketBaseSession(storage?: StorageLike): void {
   storageOf(storage)?.removeItem(SESSION_KEY);
 }
 
-export async function loginWithPocketBase(identity: string, password: string, options: AuthOptions = {}): Promise<PocketBaseSession> {
+export async function loginWithPocketBase(identity: string, password: string, options: AuthOptions = {}): Promise<PocketBaseAuthResult> {
   const config = options.config || runtimeConfig;
   const fetchImpl = options.fetchImpl || fetch;
   const cleanIdentity = String(identity || '').trim();
@@ -207,13 +225,13 @@ export async function loginWithPocketBase(identity: string, password: string, op
     }
   }
 
-  const session = sessionFromPayload(payload, collection, config);
-  if (!session.kisCode) throw new AuthError('MISSING_KIS_CODE', 'У учётной записи не заполнено поле kis_code.', 422);
-  savePocketBaseSession(session, options.storage);
-  return session;
+  const result = authResultFromPayload(payload, collection, config);
+  if (!result.session.kisCode) throw new AuthError('MISSING_KIS_CODE', 'У учётной записи не заполнено поле kis_code.', 422);
+  savePocketBaseSession(result.session, options.storage);
+  return result;
 }
 
-export async function refreshPocketBaseSession(options: AuthOptions = {}): Promise<PocketBaseSession | null> {
+export async function refreshPocketBaseSession(options: AuthOptions = {}): Promise<PocketBaseAuthResult | null> {
   const config = options.config || runtimeConfig;
   const fetchImpl = options.fetchImpl || fetch;
   const current = getPocketBaseSession(options.storage);
@@ -228,13 +246,13 @@ export async function refreshPocketBaseSession(options: AuthOptions = {}): Promi
     clearPocketBaseSession(options.storage);
     throw new AuthError('SESSION_EXPIRED', 'Сессия истекла. Войдите снова.', response.status);
   }
-  const session = sessionFromPayload(payload, current.collection, config);
-  if (!session.kisCode) {
+  const result = authResultFromPayload(payload, current.collection, config);
+  if (!result.session.kisCode) {
     clearPocketBaseSession(options.storage);
     throw new AuthError('MISSING_KIS_CODE', 'У учётной записи не заполнено поле kis_code.', 422);
   }
-  savePocketBaseSession(session, options.storage);
-  return session;
+  savePocketBaseSession(result.session, options.storage);
+  return result;
 }
 
 export { SESSION_KEY };

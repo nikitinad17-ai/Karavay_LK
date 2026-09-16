@@ -2,10 +2,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const projectRoot = process.cwd();
-const distDir = path.join(projectRoot, 'standalone-dist');
+const argument = (name, fallback) => {
+  const prefix = `--${name}=`;
+  const value = process.argv.slice(2).find((item) => item.startsWith(prefix));
+  return value ? value.slice(prefix.length) : fallback;
+};
+const variant = argument('variant', 'demo');
+const distDir = path.join(projectRoot, argument('dist', 'standalone-dist'));
 const assetsDir = path.join(distDir, 'assets');
 const outputDir = path.join(projectRoot, 'artifacts');
-const outputPath = path.join(outputDir, 'Karavay-LK-v3.4-TypeScript-standalone.html');
+const outputPath = path.join(outputDir, argument('output', 'Karavay-LK-v3.5.html'));
 
 let html = fs.readFileSync(path.join(distDir, 'index.html'), 'utf8');
 const scriptMatch = html.match(/<script type="module" crossorigin src="\.\/assets\/([^"]+)"><\/script>/);
@@ -19,26 +25,27 @@ let javascript = fs.readFileSync(path.join(assetsDir, scriptMatch[1]), 'utf8');
 const css = fs.readFileSync(path.join(assetsDir, styleMatch[1]), 'utf8');
 const logo = fs.readFileSync(path.join(projectRoot, 'public', 'logo-official.svg')).toString('base64');
 const favicon = fs.readFileSync(path.join(projectRoot, 'public', 'favicon.svg')).toString('base64');
-const pdf = fs.readFileSync(
-  path.join(projectRoot, 'public', 'docs', 'Reestr-deklaratsii-sootvetstviia.pdf'),
-).toString('base64');
-
 const mockChunkName = fs.readdirSync(assetsDir)
   .find((name) => name.startsWith('mockApi-') && name.endsWith('.js'));
 
-if (!mockChunkName) {
+if (variant === 'demo' && !mockChunkName) {
   throw new Error('Не найден demo-модуль mockApi в standalone-dist/assets');
 }
 
-let mockJavascript = fs.readFileSync(path.join(assetsDir, mockChunkName), 'utf8');
-mockJavascript = mockJavascript.replaceAll(
-  'docs/Reestr-deklaratsii-sootvetstviia.pdf',
-  `data:application/pdf;base64,${pdf}`,
-);
-const mockDataUrl = `data:text/javascript;base64,${Buffer.from(mockJavascript).toString('base64')}`;
+if (mockChunkName) {
+  const pdf = fs.readFileSync(
+    path.join(projectRoot, 'public', 'docs', 'Reestr-deklaratsii-sootvetstviia.pdf'),
+  ).toString('base64');
+  let mockJavascript = fs.readFileSync(path.join(assetsDir, mockChunkName), 'utf8');
+  mockJavascript = mockJavascript.replaceAll(
+    'docs/Reestr-deklaratsii-sootvetstviia.pdf',
+    `data:application/pdf;base64,${pdf}`,
+  );
+  const mockDataUrl = `data:text/javascript;base64,${Buffer.from(mockJavascript).toString('base64')}`;
+  javascript = javascript.replaceAll(`./${mockChunkName}`, mockDataUrl);
+}
 
 javascript = javascript
-  .replaceAll(`./${mockChunkName}`, mockDataUrl)
   .replaceAll('./logo-official.svg', `data:image/svg+xml;base64,${logo}`)
   .replaceAll('</script', '<\\/script');
 
@@ -48,7 +55,7 @@ html = html
   .replace('./favicon.svg', `data:image/svg+xml;base64,${favicon}`)
   .replace(/\s*<link rel="preconnect"[^>]+>\s*/g, '\n  ')
   .replace(/\s*<link href="https:\/\/fonts\.googleapis\.com[^"]+"[^>]+>\s*/g, '\n  ')
-  .replace('<head>', '<head>\n  <!-- КАРАВАЙ · Личный кабинет 3.4 TypeScript · автономная сборка -->');
+  .replace('<head>', `<head>\n  <!-- КАРАВАЙ · Личный кабинет 3.5 · ${variant === 'demo' ? 'демо' : 'PocketBase directory'} -->`);
 
 fs.mkdirSync(outputDir, { recursive: true });
 fs.writeFileSync(outputPath, html);

@@ -8,7 +8,7 @@ import App from '../src/App';
 async function renderLoggedIn() {
   const user = userEvent.setup();
   render(<StoreProvider><App /></StoreProvider>);
-  await user.click(screen.getByRole('button', { name: /DEMO-B-01 · Демо-покупатель 01/ }));
+  await user.click(await screen.findByRole('button', { name: /DEMO-B-01 · Демо-покупатель 01/ }));
   await user.click(screen.getByRole('button', { name: 'Войти' }));
   await screen.findByRole('heading', { name: 'Обзор' });
   return user;
@@ -20,7 +20,7 @@ async function openCatalog(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByRole('heading', { name: /Каталог продукции/ });
 }
 
-describe('React 3.4 TypeScript', () => {
+describe('React 3.5 TypeScript', () => {
   test('открывает проверку заказа и возвращается без потери корзины', async () => {
     const user = await renderLoggedIn();
     await openCatalog(user);

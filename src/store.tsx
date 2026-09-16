@@ -18,8 +18,9 @@ import { createRequestGate } from './requestGate';
 import {
   clearPocketBaseSession, loginWithPocketBase, refreshPocketBaseSession, AuthError,
 } from './authApi';
-import type { PocketBaseSession } from './authApi';
-import { isMockDataMode, isPocketBaseAuthMode } from './runtimeConfig';
+import type { PocketBaseAuthResult } from './authApi';
+import { loadPocketBaseDirectory } from './pocketBaseDirectoryApi';
+import { isMockDataMode, isPocketBaseAuthMode, isPocketBaseDirectoryMode } from './runtimeConfig';
 
 // Форма state — 1:1 с исходным объектом state из app.js (vanilla), чтобы
 // перенос экранов был максимально механическим.
@@ -241,7 +242,7 @@ export function useAuth() {
   const { patch, getState } = useStore();
   const { loadBuyerData } = useLoaders();
 
-  const applyLoginResponse = useCallback((resp: LoginResponse) => {
+  const applyLoginResponse = useCallback((resp: LoginResponse, loadBusinessData = true) => {
     const buyer = adaptPayer(resp.payer);
     const patchObj: StatePatch = { role: resp.role, buyer, route: 'dashboard', orderReady: false };
     if (resp.role === 'buyer') {
@@ -254,11 +255,18 @@ export function useAuth() {
       patchObj.currentOutletId = one.id;
     }
     patch(patchObj);
-    // loadBuyerData читает getState() внутри setTimeout(0), чтобы patch успел примениться
-    setTimeout(loadBuyerData, 0);
+    // loadBuyerData читает getState() внутри setTimeout(0), чтобы patch успел примениться.
+    // В directory-режиме профиль и точки уже пришли из PocketBase, а КИС ещё не подключена.
+    if (loadBusinessData) setTimeout(loadBuyerData, 0);
   }, [patch, loadBuyerData]);
 
-  const applyPocketBaseSession = useCallback((session: PocketBaseSession) => {
+  const applyPocketBaseAuth = useCallback((auth: PocketBaseAuthResult) => {
+    if (isPocketBaseDirectoryMode()) {
+      return loadPocketBaseDirectory(auth).then((resp) => {
+        applyLoginResponse(resp, false);
+        return resp;
+      });
+    }
     if (!isMockDataMode()) {
       throw new AuthError(
         'BUSINESS_API_NOT_CONNECTED',
@@ -269,9 +277,9 @@ export function useAuth() {
     return api<LoginResponse>('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: session.kisCode, password: 'authenticated-by-pocketbase' }),
+      body: JSON.stringify({ code: auth.session.kisCode, password: 'authenticated-by-pocketbase' }),
     }).then((resp) => {
-      if (resp.role !== session.role) {
+      if (resp.role !== auth.session.role) {
         throw new AuthError('ROLE_MISMATCH', 'Роль PocketBase не совпадает с тестовым профилем.', 409);
       }
       applyLoginResponse(resp);
@@ -282,7 +290,7 @@ export function useAuth() {
   const login = useCallback((code: string, password: string, remember: boolean) => {
     const request = isPocketBaseAuthMode()
       ? loginWithPocketBase(code, password)
-        .then(applyPocketBaseSession)
+        .then(applyPocketBaseAuth)
         .catch((error) => { clearPocketBaseSession(); throw error; })
       : api<LoginResponse>('/api/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, password }),
@@ -291,15 +299,15 @@ export function useAuth() {
       if (remember !== false) setDeviceCode(code);
       return resp;
     });
-  }, [applyLoginResponse, applyPocketBaseSession]);
+  }, [applyLoginResponse, applyPocketBaseAuth]);
 
   const restoreSession = useCallback(() => {
     if (!isPocketBaseAuthMode()) return Promise.resolve(false);
-    return refreshPocketBaseSession().then((session) => {
-      if (!session) return false;
-      return applyPocketBaseSession(session).then(() => true);
+    return refreshPocketBaseSession().then((auth) => {
+      if (!auth) return false;
+      return applyPocketBaseAuth(auth).then(() => true);
     }).catch((error: unknown) => { clearPocketBaseSession(); throw error; });
-  }, [applyPocketBaseSession]);
+  }, [applyPocketBaseAuth]);
 
   const doLogout = useCallback(() => {
     clearPocketBaseSession();

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLoaders, useOrderActions, useStore } from './store';
+import { currentOutletOf, useLoaders, useOrderActions, useStore } from './store';
 import { initials, esc } from './utils';
 import Sidebar from './components/Sidebar';
 import OutletBar from './components/OutletBar';
@@ -15,8 +15,10 @@ import Documents from './components/Documents';
 import Profile from './components/Profile';
 import MobileReview from './components/MobileReview';
 import OrderReview from './components/OrderReview';
+import BusinessDataPending from './components/BusinessDataPending';
 import { IconMenu } from './icons';
 import type { Route, StatePatch } from './types';
+import { isPocketBaseDirectoryMode } from './runtimeConfig';
 
 const TITLES: Record<Exclude<Route, 'login'>, string> = {
   dashboard: 'Обзор',
@@ -60,18 +62,24 @@ export default function App() {
   }
 
   const b = state.buyer;
+  const directoryMode = isPocketBaseDirectoryMode();
+  const signedInOutlet = state.role === 'outlet' ? currentOutletOf(state) : null;
+  const identityName = signedInOutlet?.name || b.name;
+  const identityCode = signedInOutlet?.code || b.code;
   const blockingOverlay = Boolean(state.reviewOpen || state.modalOrder || state.confirm);
   const isBuyerRole = state.role === 'buyer';
   const scopeLabel = isBuyerRole
-    ? (state.outlets.length > 1 ? state.outlets.length + ' точки · доступ покупателя' : '1 точка · доступ покупателя')
+    ? (state.outlets.length === 0
+      ? 'нет получателей · доступ покупателя'
+      : state.outlets.length > 1 ? state.outlets.length + ' точки · доступ покупателя' : '1 точка · доступ покупателя')
     : 'Только эта точка · доступ получателя';
 
   let PageContent = null;
   switch (state.route) {
-    case 'order': PageContent = <OrderPage />; break;
-    case 'orders': PageContent = <OrdersHistory />; break;
+    case 'order': PageContent = directoryMode ? <BusinessDataPending section="order" /> : <OrderPage />; break;
+    case 'orders': PageContent = directoryMode ? <BusinessDataPending section="orders" /> : <OrdersHistory />; break;
     case 'outlets': PageContent = <Outlets />; break;
-    case 'documents': PageContent = <Documents />; break;
+    case 'documents': PageContent = directoryMode ? <BusinessDataPending section="documents" /> : <Documents />; break;
     case 'profile': PageContent = <Profile goto={goto} />; break;
     default: PageContent = <Dashboard goto={goto} />;
   }
@@ -87,15 +95,20 @@ export default function App() {
           <h1 className="topbar__title">{TITLES[state.route] || ''}</h1>
           <div className="topbar__spacer" />
           <div className="topbar__user">
-            <div className="avatar">{initials(b.name)}</div>
+            <div className="avatar">{initials(identityName)}</div>
             <div>
-              <div className="topbar__user-name">{esc(b.name)}</div>
-              <div className="topbar__user-code">{esc(b.code)} · {scopeLabel}</div>
+              <div className="topbar__user-name">{esc(identityName)}</div>
+              <div className="topbar__user-code">{esc(identityCode)} · {scopeLabel}</div>
             </div>
           </div>
         </div>
         <div className={'content' + (state.route === 'order' ? ' content--wide' : '')}>
           <OutletBar />
+          {directoryMode ? (
+            <div className="banner banner--info" role="status">
+              <div><strong>PocketBase подключён.</strong> Профиль и получатели загружены из базы. Заказы, матрица и документы подключим отдельным серверным API КИС.</div>
+            </div>
+          ) : null}
           {state.initialLoadError ? (
             <div className="banner banner--danger load-error" role="alert">
               <div><strong>Данные кабинета не загрузились.</strong> {state.initialLoadError}</div>

@@ -5,25 +5,11 @@ import { getDeviceCode, api } from '../utils';
 import { getPocketBaseSession } from '../authApi';
 import { isMockAuthMode, isPocketBaseAuthMode } from '../runtimeConfig';
 import type { DeviceClient } from '../types';
+import type { DemoAccountGroups } from '../demoAccounts';
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
-
-const DEMO_EDI = [
-  { code: 'DEMO-B-15', label: 'DEMO-B-15 · Демо-покупатель EDI', edi: true },
-  { code: 'DEMO-B-16', label: 'DEMO-B-16 · Демо-покупатель EDI', edi: true },
-];
-const DEMO_OTHER = Array.from({ length: 14 }, (_, index) => {
-  const id = index + 1;
-  const code = `DEMO-B-${String(id).padStart(2, '0')}`;
-  const state = id === 2 ? ' · отрицательное сальдо' : id === 4 ? ' · без договора' : id === 8 ? ' · отгрузка запрещена' : '';
-  return { code, label: `${code} · Демо-покупатель ${String(id).padStart(2, '0')}${state}` };
-});
-const DEMO_OUTLETS = [
-  { code: 'DEMO-O-0101', label: 'DEMO-O-0101 · Демо-точка 0101' },
-  { code: 'DEMO-O-1101', label: 'DEMO-O-1101 · Демо-точка 1101' },
-];
 
 export default function Login() {
   const { state, patch } = useStore();
@@ -34,10 +20,23 @@ export default function Login() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [restoring, setRestoring] = useState(isPocketBaseAuthMode() && Boolean(getPocketBaseSession()));
+  const [demoAccounts, setDemoAccounts] = useState<DemoAccountGroups | null>(null);
   const restoreStarted = useRef(false);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_AUTH_MODE !== 'mock') return;
+    let active = true;
+    import('../demoAccounts').then(({ demoAccountGroups }) => {
+      if (active) setDemoAccounts(demoAccountGroups);
+    }).catch(() => {
+      if (active) setError('Не удалось загрузить демонстрационные профили.');
+    });
+    return () => { active = false; };
+  }, []);
 
   // При маунте — если устройство запомнено, подтягиваем данные доверенного клиента
   useEffect(() => {
+    if (isPocketBaseAuthMode()) return;
     const saved = getDeviceCode();
     if (saved && !state.deviceClient) {
       api<DeviceClient>('/api/lookup?code=' + encodeURIComponent(saved)).then((info) => {
@@ -57,7 +56,7 @@ export default function Login() {
     });
   }, [restoring, restoreSession]);
 
-  const trusted = state.deviceClient;
+  const trusted = isPocketBaseAuthMode() ? null : state.deviceClient;
   const trustedInitials = trusted
     ? String(trusted.name || '').split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase()
     : '';
@@ -68,7 +67,7 @@ export default function Login() {
     setError('');
     setSubmitting(true);
     const codeVal = trusted ? trusted.code : code;
-    login(codeVal, password, trusted ? true : remember)
+    login(codeVal, password, isPocketBaseAuthMode() ? false : trusted ? true : remember)
       .catch((err: unknown) => setError(errorMessage(err, 'Неверный ' + (trusted ? 'пароль' : 'код или пароль') + '. Попробуйте ещё раз.')))
       .finally(() => setSubmitting(false));
   }
@@ -120,12 +119,12 @@ export default function Login() {
           ) : (
             <>
               <h2 className="login__title">Вход в кабинет</h2>
-              <p className="login__sub">{isPocketBaseAuthMode() ? 'Тестовый вход через PocketBase: введите kis_code и пароль учётной записи.' : 'Введите код покупателя или код точки и пароль, которые вам выдал менеджер.'}</p>
+              <p className="login__sub">{isPocketBaseAuthMode() ? 'Введите код КИС и пароль учётной записи PocketBase.' : 'Введите код покупателя или код точки и пароль, которые вам выдал менеджер.'}</p>
               <div id="loginErr">{error && <div className="login__error">{error}</div>}</div>
               <div className="login__field">
                 <label htmlFor="loginCode">Код покупателя или точки</label>
                 <input
-                  id="loginCode" type="text" placeholder="DEMO-B-01 или DEMO-O-0101" autoComplete="username"
+                  id="loginCode" type="text" placeholder="Например, A016 или M-1467-01" autoComplete="username"
                   required value={code} onChange={(e) => setCode(e.target.value)}
                 />
               </div>
@@ -136,27 +135,29 @@ export default function Login() {
                   required value={password} onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
-              <label className="login__remember">
-                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Запомнить меня на этом устройстве
-              </label>
+              {!isPocketBaseAuthMode() ? (
+                <label className="login__remember">
+                  <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Запомнить меня на этом устройстве
+                </label>
+              ) : null}
               <button className="login__submit" type="submit" disabled={submitting || restoring}>{restoring ? 'Проверяем сессию…' : submitting ? 'Входим…' : 'Войти'}</button>
-              {isMockAuthMode() ? <div className="login__hint">
+              {isMockAuthMode() && demoAccounts ? <div className="login__hint">
                 <strong>Демо-профили:</strong> кликните по коду — профиль и одноразовый демонстрационный ключ подставятся в форму. Реальные пароли в репозитории не хранятся.
                 <div style={{ marginTop: 10, fontSize: 12, color: 'var(--gray-600)' }}>Клиенты на ЭДО (заказывают и через личный кабинет):</div>
                 <div className="login__demos">
-                  {DEMO_EDI.map((d) => (
+                  {demoAccounts.edi.map((d) => (
                     <button key={d.code} type="button" className="login__demo login__demo--edi" onClick={() => fillDemo(d.code)}>{d.label}</button>
                   ))}
                 </div>
                 <div style={{ marginTop: 10, fontSize: 12, color: 'var(--gray-600)' }}>Остальные клиенты:</div>
                 <div className="login__demos">
-                  {DEMO_OTHER.map((d) => (
+                  {demoAccounts.buyers.map((d) => (
                     <button key={d.code} type="button" className="login__demo" onClick={() => fillDemo(d.code)}>{d.label}</button>
                   ))}
                 </div>
                 <div style={{ marginTop: 10, fontSize: 12, color: 'var(--gray-600)' }}>Демо точек-получателей (видят только свою точку, без сальдо):</div>
                 <div className="login__demos">
-                  {DEMO_OUTLETS.map((d) => (
+                  {demoAccounts.outlets.map((d) => (
                     <button key={d.code} type="button" className="login__demo" onClick={() => fillDemo(d.code)}>{d.label}</button>
                   ))}
                 </div>

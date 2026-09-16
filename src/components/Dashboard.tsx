@@ -5,6 +5,7 @@ import {
 import { ShipmentPill } from './Pills';
 import { IconPlus } from '../icons';
 import type { Role, Route } from '../types';
+import { isPocketBaseDirectoryMode } from '../runtimeConfig';
 
 function showsBalance(role: Role | null): boolean { return role === 'buyer'; }
 
@@ -14,6 +15,47 @@ export default function Dashboard({ goto }: { goto: (route: Route) => void }) {
   const b = state.buyer;
   if (!b) return null;
   const ol = currentOutletOf(state);
+  if (isPocketBaseDirectoryMode()) {
+    const isBuyer = state.role === 'buyer';
+    return (
+      <>
+        <div className="hero-card">
+          <h2>Здравствуйте, {esc(b.name)}!</h2>
+          <p>
+            Вход через PocketBase выполнен. Роль: <strong>{isBuyer ? 'покупатель' : 'получатель'}</strong>.
+          </p>
+          <div className="actions">
+            {isBuyer ? <button className="btn btn--primary" onClick={() => goto('outlets')}><IconPlus />Открыть получателей</button> : null}
+            <button className="btn btn--ghost" onClick={() => goto('profile')}>Открыть профиль</button>
+          </div>
+        </div>
+        <div className="grid grid-3" style={{ marginTop: 20 }}>
+          <div className="kpi kpi--accent">
+            <div className="kpi__label">Авторизация</div>
+            <div className="kpi__value">OK</div>
+            <div className="kpi__hint">Токен PocketBase принят</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi__label">Код КИС</div>
+            <div className="kpi__value">{esc(isBuyer ? b.code : ol?.code || b.code)}</div>
+            <div className="kpi__hint">Связь учётной записи</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi__label">Получателей</div>
+            <div className="kpi__value">{state.outlets.length}</div>
+            <div className="kpi__hint">Доступны этой учётной записи</div>
+          </div>
+        </div>
+        <div className="card" style={{ marginTop: 20 }}>
+          <h3 className="card__title">Что проверяем на этом этапе</h3>
+          <p style={{ margin: 0, color: 'var(--gray-600)', lineHeight: 1.6 }}>
+            Корректный вход, сохранение сессии после F5, выход и разграничение доступа.
+            Покупатель должен видеть только связанных с ним получателей, а получатель — только собственную точку.
+          </p>
+        </div>
+      </>
+    );
+  }
   const scope = state.ordersAll || [];
   const multiOutlet = state.role === 'buyer' && state.outlets && state.outlets.length > 1;
 

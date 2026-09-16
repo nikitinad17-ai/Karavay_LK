@@ -1,6 +1,7 @@
 import { useStore, lastOrderForOutlet } from '../store';
 import { esc, plural } from '../utils';
 import RecipientRow from './RecipientRow';
+import { isPocketBaseDirectoryMode } from '../runtimeConfig';
 
 export default function Outlets() {
   const { state } = useStore();
@@ -10,10 +11,16 @@ export default function Outlets() {
 
   return (
     <>
-      <div className="banner banner--info">
-        <strong>Настройки точки (минимальная сумма, возможность отгрузки, маршрут доставки) корректируются Караваем.</strong>
-        {' '}Для изменений свяжитесь с вашим менеджером: <strong>{esc(b.manager || '—')}</strong>, {esc(b.managerPhone || '')}.
-      </div>
+      {isPocketBaseDirectoryMode() ? (
+        <div className="banner banner--info">
+          <strong>Список получен напрямую из PocketBase.</strong> Новые записи и связи пока создаются администратором; пользователь не может добавлять или перепривязывать получателей из браузера.
+        </div>
+      ) : (
+        <div className="banner banner--info">
+          <strong>Настройки точки (минимальная сумма, возможность отгрузки, маршрут доставки) корректируются Караваем.</strong>
+          {' '}Для изменений свяжитесь с вашим менеджером: <strong>{esc(b.manager || '—')}</strong>, {esc(b.managerPhone || '')}.
+        </div>
+      )}
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           <h3 className="card__title" style={{ margin: 0 }}>

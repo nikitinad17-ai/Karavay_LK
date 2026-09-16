@@ -2,7 +2,9 @@ node_modules/
 dist/
 dist-demo/
 dist-pocketbase/
+dist-pocketbase-directory/
 standalone-dist/
+standalone-pocketbase-dist/
 artifacts/
 test-results/
 playwright-report/

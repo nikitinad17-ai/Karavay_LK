@@ -1,5 +1,5 @@
 export type AuthMode = 'mock' | 'pocketbase';
-export type DataMode = 'mock' | 'remote';
+export type DataMode = 'mock' | 'directory' | 'remote';
 
 export interface RuntimeConfig {
   readonly authMode: AuthMode;
@@ -27,7 +27,9 @@ export function resolveRuntimeConfig(env: RuntimeEnv = {}): RuntimeConfig {
   const authTimeoutMs = Number(env.VITE_AUTH_TIMEOUT_MS || 12000);
 
   if (authMode !== 'mock' && authMode !== 'pocketbase') throw new Error('VITE_AUTH_MODE должен быть mock или pocketbase');
-  if (dataMode !== 'mock' && dataMode !== 'remote') throw new Error('VITE_DATA_MODE должен быть mock или remote');
+  if (dataMode !== 'mock' && dataMode !== 'directory' && dataMode !== 'remote') {
+    throw new Error('VITE_DATA_MODE должен быть mock, directory или remote');
+  }
   if (pocketBaseUrl) {
     let parsed;
     try { parsed = new URL(pocketBaseUrl); } catch { throw new Error('VITE_POCKETBASE_URL должен быть корректным URL'); }
@@ -53,3 +55,4 @@ export const runtimeConfig = resolveRuntimeConfig(import.meta.env || {});
 export const isMockAuthMode = () => runtimeConfig.authMode === 'mock';
 export const isPocketBaseAuthMode = () => runtimeConfig.authMode === 'pocketbase';
 export const isMockDataMode = () => runtimeConfig.dataMode === 'mock';
+export const isPocketBaseDirectoryMode = () => runtimeConfig.dataMode === 'directory';

@@ -42,7 +42,7 @@ test('режимы по умолчанию не включают mock в product
 test('покупатель входит через buyers и сессия сохраняется без пароля', async () => {
   const storage = memoryStorage();
   const calls: Array<{ url: string; init?: RequestInit }> = [];
-  const session = await loginWithPocketBase('DEMO-B-01', 'entered-only-here', {
+  const result = await loginWithPocketBase('DEMO-B-01', 'entered-only-here', {
     config, storage,
     fetchImpl: async (url, init) => {
       calls.push({ url: requestUrl(url), init });
@@ -50,7 +50,8 @@ test('покупатель входит через buyers и сессия сох
     },
   });
 
-  assert.equal(session.role, 'buyer');
+  assert.equal(result.session.role, 'buyer');
+  assert.equal(result.record.id, 'buyer-1');
   assert.equal(calls.length, 1);
   assert.match(calls[0].url, /\/buyers\/auth-with-password$/);
   assert.equal(getPocketBaseSession(storage)?.token, 'buyer-token');
@@ -62,7 +63,7 @@ test('покупатель входит через buyers и сессия сох
 test('после отказа buyers точка входит через outlets', async () => {
   const storage = memoryStorage();
   const urls: string[] = [];
-  const session = await loginWithPocketBase('DEMO-O-0101', 'temporary-input', {
+  const result = await loginWithPocketBase('DEMO-O-0101', 'temporary-input', {
     config, storage,
     fetchImpl: async (url) => {
       const value = requestUrl(url);
@@ -72,7 +73,7 @@ test('после отказа buyers точка входит через outlets'
     },
   });
 
-  assert.equal(session.role, 'outlet');
+  assert.equal(result.session.role, 'outlet');
   assert.equal(urls.length, 2);
   assert.match(urls[1], /\/outlets\/auth-with-password$/);
 });
@@ -129,7 +130,7 @@ test('auth-refresh обновляет токен и отправляет ста�
   });
 
   assert.equal(authorization, 'old-token');
-  assert.equal(refreshed?.token, 'new-token');
+  assert.equal(refreshed?.session.token, 'new-token');
   clearPocketBaseSession(storage);
   assert.equal(getPocketBaseSession(storage), null);
 });

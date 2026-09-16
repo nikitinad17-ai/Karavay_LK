@@ -4,6 +4,7 @@ import { ShipmentPill } from './Pills';
 import RecipientRow from './RecipientRow';
 import { IconOutlets } from '../icons';
 import type { Role, Route } from '../types';
+import { isPocketBaseDirectoryMode } from '../runtimeConfig';
 
 function showsBalance(role: Role | null): boolean { return role === 'buyer'; }
 
@@ -11,6 +12,50 @@ export default function Profile({ goto }: { goto: (route: Route) => void }) {
   const { state } = useStore();
   const b = state.buyer;
   if (!b) return null;
+
+  if (isPocketBaseDirectoryMode()) {
+    const current = currentOutletOf(state);
+    return (
+      <>
+        <div className="grid grid-2">
+          <div className="card">
+            <h3 className="card__title">Покупатель из PocketBase</h3>
+            <dl className="dl">
+              <dt>Наименование</dt><dd>{esc(b.name)}</dd>
+              <dt>Код КИС</dt><dd><strong>{esc(b.code)}</strong></dd>
+              <dt>ID КИС</dt><dd>{b.Id_pay}</dd>
+              <dt>Роль входа</dt><dd>{state.role === 'buyer' ? 'Покупатель' : 'Получатель'}</dd>
+            </dl>
+          </div>
+          <div className="card">
+            <h3 className="card__title">Текущий доступ</h3>
+            <dl className="dl">
+              <dt>Получателей</dt><dd>{state.outlets.length}</dd>
+              <dt>Текущая точка</dt><dd>{current ? esc(current.name) : '—'}</dd>
+              <dt>Код точки</dt><dd>{current ? esc(current.code) : '—'}</dd>
+              <dt>Адрес</dt><dd>{current ? esc(current.address) : '—'}</dd>
+            </dl>
+          </div>
+        </div>
+        {state.role === 'buyer' && state.outlets.length ? (
+          <div className="card" style={{ marginTop: 20 }}>
+            <h3 className="card__title">Связанные получатели</h3>
+            <div className="recipient-list">
+              {state.outlets.map((o) => (
+                <RecipientRow key={o.id} o={o} minBuyer={0} lastOrder={null} />
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="card" style={{ marginTop: 20 }}>
+          <h3 className="card__title">Граница этапа</h3>
+          <p style={{ margin: 0, color: 'var(--gray-600)', lineHeight: 1.6 }}>
+            Эти данные загружены из PocketBase. Договор, сальдо, цены, матрица, заказы и документы появятся только после подключения серверного API КИС.
+          </p>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
