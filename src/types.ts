@@ -1,7 +1,8 @@
 import type { Dispatch, ReactNode } from 'react';
 
 export type Role = 'buyer' | 'outlet';
-export type Route = 'login' | 'dashboard' | 'order' | 'orders' | 'outlets' | 'documents' | 'profile';
+export type BuyerAccessRole = 'owner' | 'manager' | 'viewer';
+export type Route = 'login' | 'buyer-select' | 'dashboard' | 'order' | 'orders' | 'outlets' | 'documents' | 'profile';
 export type OrderFilter = 'all' | 'in-cart' | 'promo';
 export type OrderGroup = 0 | 1;
 export type OrderStatus = 'accepted' | 'routed' | 'onway' | 'shipped' | 'deleted';
@@ -10,6 +11,8 @@ export type ShipmentMode = 'allowed' | 'blocked' | 'balance';
 export type ShipmentCause = 'no_contract' | 'manual' | 'balance' | null;
 
 export interface Outlet {
+  recordId: string | null;
+  buyerRecordId: string | null;
   id: number;
   id_clt: number;
   code: string;
@@ -27,6 +30,7 @@ export interface Outlet {
 }
 
 export interface Buyer {
+  recordId: string | null;
   id: number;
   Id_pay: number;
   code: string;
@@ -53,6 +57,40 @@ export interface Buyer {
   usesEdi: boolean;
   ediClientCode: string | null;
   badges: string[];
+  outlets: Outlet[];
+}
+
+export interface AuthenticatedUser {
+  id: string;
+  login: string;
+  name: string;
+  active: boolean;
+  mustChangePassword: boolean;
+}
+
+export interface BuyerMembership {
+  id: string;
+  userId: string;
+  buyerId: string;
+  role: BuyerAccessRole;
+  active: boolean;
+}
+
+export interface UserBuyerAccess {
+  membership: BuyerMembership;
+  buyer: Buyer;
+}
+
+export interface UserDirectory {
+  user: AuthenticatedUser;
+  accesses: UserBuyerAccess[];
+}
+
+export interface SelectedBuyerContext {
+  userId: string;
+  buyerId: string;
+  membership: BuyerMembership;
+  buyer: Buyer;
   outlets: Outlet[];
 }
 
@@ -159,6 +197,12 @@ export interface DeviceClient {
 }
 
 export interface AppState {
+  authenticatedUser: AuthenticatedUser | null;
+  userDirectory: UserDirectory | null;
+  selectedBuyerContext: SelectedBuyerContext | null;
+  buyerSelectionRequired: boolean;
+  buyerSwitching: boolean;
+  buyerSwitchError: string;
   buyer: Buyer | null;
   role: Role | null;
   outlets: Outlet[];

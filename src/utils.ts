@@ -47,6 +47,7 @@ export function isoToUnix(iso: string | null | undefined): number | null {
 // ================ АДАПТЕРЫ КИС → ИНТЕРФЕЙС ================
 export function adaptPayer(k: KisPayer): Buyer {
   return {
+    recordId: null,
     id: k.lk_id, Id_pay: k.Id_pay,
     code: k.KodPay, name: k.NamePay, legal: k.Adres,
     manager: k.Manager || null, managerPhone: k.lk_managerPhone || null,
@@ -69,6 +70,7 @@ export function adaptPayer(k: KisPayer): Buyer {
 }
 export function adaptClient(k: KisClient): Outlet {
   return {
+    recordId: null, buyerRecordId: null,
     id: k.lk_id, id_clt: k.id_clt,
     code: k.KodClt, name: k.NameClt, address: k.Adres,
     minOrderSum: k.OrdLimitMinSum, rep: k.TorgPred || null,

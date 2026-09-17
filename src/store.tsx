@@ -2,7 +2,7 @@ import { createContext, useContext, useReducer, useCallback, useRef } from 'reac
 import type {
   ApiErrorPayload, AppState, CartDetail, DocumentRecord, KisOrder, LoginResponse, MatrixResponse,
   Order, OrderDetailsResponse, OrderGroup, OrderItem, OrderMutationResponse, OrderSnapshot, Outlet,
-  Product, StatePatch, StoreAction, StoreContextValue, StoreProviderProps, ToastMessage,
+  Product, StatePatch, StoreAction, StoreContextValue, StoreProviderProps, ToastMessage, UserDirectory,
   OrdersResponse,
 } from './types';
 import {
@@ -16,15 +16,24 @@ import {
 } from './orderRules';
 import { createRequestGate } from './requestGate';
 import {
-  clearPocketBaseSession, loginWithPocketBase, refreshPocketBaseSession, AuthError,
+  clearPocketBaseSession, clearSelectedBuyerId, getPocketBaseSession, getSelectedBuyerId,
+  loginWithPocketBase, refreshPocketBaseSession, saveSelectedBuyerId, AuthError,
 } from './authApi';
 import type { PocketBaseAuthResult } from './authApi';
-import { loadPocketBaseDirectory } from './pocketBaseDirectoryApi';
-import { isMockDataMode, isPocketBaseAuthMode, isPocketBaseDirectoryMode } from './runtimeConfig';
+import {
+  findBuyerAccess, loadSelectedBuyerContext, loadUserDirectory, resolveInitialBuyerId,
+} from './pocketBaseDirectoryApi';
+import { isPocketBaseAuthMode, isPocketBaseDirectoryMode } from './runtimeConfig';
 
 // Форма state — 1:1 с исходным объектом state из app.js (vanilla), чтобы
 // перенос экранов был максимально механическим.
 export const initialState: AppState = {
+  authenticatedUser: null,
+  userDirectory: null,
+  selectedBuyerContext: null,
+  buyerSelectionRequired: false,
+  buyerSwitching: false,
+  buyerSwitchError: '',
   buyer: null,
   role: null,
   outlets: [],
@@ -63,6 +72,54 @@ export const initialState: AppState = {
   initialLoadError: '',
   orderEditError: '',
 };
+
+export function buyerBusinessReset(route: AppState['route'] = 'buyer-select'): StatePatch {
+  return {
+    selectedBuyerContext: null,
+    buyer: null,
+    role: null,
+    outlets: [],
+    currentOutletId: null,
+    profileOutletId: null,
+    products: [],
+    baseDiscount: 0,
+    ordersAll: [],
+    documents: [],
+    cart: {},
+    cartDetails: {},
+    categories: [],
+    filter: 'all',
+    route,
+    loading: false,
+    toast: null,
+    modalOrder: null,
+    editSnapshot: null,
+    productSearch: '',
+    confirm: null,
+    filtersOpen: false,
+    ordersOutletFilter: 'all',
+    orderGroup: 1,
+    orderDate: null,
+    matrixLoading: false,
+    matrixError: null,
+    detailsCache: {},
+    orderReady: false,
+    setupLastOrder: null,
+    setupLastOrderOutlet: null,
+    reviewOpen: false,
+    reviewError: '',
+    submittingOrder: false,
+    initialLoadError: '',
+    orderEditError: '',
+  };
+}
+
+export function hasUnsavedBuyerState(
+  state: Pick<AppState, 'cart' | 'modalOrder' | 'editSnapshot'>,
+): boolean {
+  if (Object.keys(state.cart || {}).length > 0) return true;
+  return Boolean(state.modalOrder && state.editSnapshot && !orderItemsEqual(state.modalOrder, state.editSnapshot));
+}
 
 // Один общий PATCH-экшен покрывает почти все переходы (как в vanilla-версии,
 // где просто менялось state.x и звался render()) — это осознанное упрощение,
@@ -239,12 +296,23 @@ export function useLoaders() {
 
 // ================ АВТОРИЗАЦИЯ ================
 export function useAuth() {
-  const { patch, getState } = useStore();
+  const { patch, getState, beginRequest, isLatestRequest } = useStore();
   const { loadBuyerData } = useLoaders();
 
   const applyLoginResponse = useCallback((resp: LoginResponse, loadBusinessData = true) => {
     const buyer = adaptPayer(resp.payer);
-    const patchObj: StatePatch = { role: resp.role, buyer, route: 'dashboard', orderReady: false };
+    const patchObj: StatePatch = {
+      authenticatedUser: null,
+      userDirectory: null,
+      selectedBuyerContext: null,
+      buyerSelectionRequired: false,
+      buyerSwitching: false,
+      buyerSwitchError: '',
+      role: resp.role,
+      buyer,
+      route: 'dashboard',
+      orderReady: false,
+    };
     if (resp.role === 'buyer') {
       patchObj.outlets = (buyer && buyer.outlets) || [];
       patchObj.currentOutletId = resp.enteredOutletId || (patchObj.outlets[0] && patchObj.outlets[0].id) || null;
@@ -260,38 +328,112 @@ export function useAuth() {
     if (loadBusinessData) setTimeout(loadBuyerData, 0);
   }, [patch, loadBuyerData]);
 
-  const applyPocketBaseAuth = useCallback((auth: PocketBaseAuthResult) => {
-    if (isPocketBaseDirectoryMode()) {
-      return loadPocketBaseDirectory(auth).then((resp) => {
-        applyLoginResponse(resp, false);
-        return resp;
+  const invalidateBuyerRequests = useCallback(() => {
+    beginRequest('buyer');
+    beginRequest('matrix');
+    beginRequest('lastOrder');
+  }, [beginRequest]);
+
+  const applySelectedBuyer = useCallback(async (
+    directory: UserDirectory,
+    buyerId: string,
+    token: string,
+    showSwitchingScreen = true,
+  ): Promise<boolean> => {
+    findBuyerAccess(directory, buyerId);
+    const requestId = beginRequest('selectedBuyer');
+    invalidateBuyerRequests();
+    if (showSwitchingScreen) {
+      patch({
+        ...buyerBusinessReset('buyer-select'),
+        authenticatedUser: directory.user,
+        userDirectory: directory,
+        buyerSelectionRequired: false,
+        buyerSwitching: true,
+        buyerSwitchError: '',
       });
     }
-    if (!isMockDataMode()) {
+    try {
+      const context = await loadSelectedBuyerContext(directory, buyerId, token);
+      if (!isLatestRequest('selectedBuyer', requestId)) return false;
+      const currentDirectory = showSwitchingScreen ? getState().userDirectory : directory;
+      if (!currentDirectory || currentDirectory.user.id !== directory.user.id) return false;
+      findBuyerAccess(currentDirectory, context.buyerId);
+      saveSelectedBuyerId(context.buyerId);
+      patch({
+        authenticatedUser: directory.user,
+        userDirectory: directory,
+        selectedBuyerContext: context,
+        buyer: context.buyer,
+        role: 'buyer',
+        outlets: context.outlets.map((outlet) => ({ ...outlet })),
+        currentOutletId: context.outlets[0]?.id || null,
+        route: 'dashboard',
+        buyerSelectionRequired: false,
+        buyerSwitching: false,
+        buyerSwitchError: '',
+      });
+      return true;
+    } catch (error: unknown) {
+      if (showSwitchingScreen && isLatestRequest('selectedBuyer', requestId)) {
+        clearSelectedBuyerId();
+        patch({
+          ...buyerBusinessReset('buyer-select'),
+          authenticatedUser: directory.user,
+          userDirectory: directory,
+          buyerSelectionRequired: true,
+          buyerSwitching: false,
+          buyerSwitchError: error instanceof Error ? error.message : 'Не удалось загрузить выбранного покупателя.',
+        });
+      }
+      throw error;
+    }
+  }, [beginRequest, getState, invalidateBuyerRequests, isLatestRequest, patch]);
+
+  const applyPocketBaseAuth = useCallback(async (
+    auth: PocketBaseAuthResult,
+    restoreStoredBuyer: boolean,
+  ): Promise<UserDirectory> => {
+    if (!isPocketBaseDirectoryMode()) {
       throw new AuthError(
         'BUSINESS_API_NOT_CONNECTED',
-        'Авторизация выполнена, но API бизнес-данных КИС ещё не подключён.',
+        'Авторизация выполнена, но каталог доступа и API бизнес-данных ещё не подключены.',
         503,
       );
     }
-    return api<LoginResponse>('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: auth.session.kisCode, password: 'authenticated-by-pocketbase' }),
-    }).then((resp) => {
-      if (resp.role !== auth.session.role) {
-        throw new AuthError('ROLE_MISMATCH', 'Роль PocketBase не совпадает с тестовым профилем.', 409);
-      }
-      applyLoginResponse(resp);
-      return resp;
-    });
-  }, [applyLoginResponse]);
+    const directory = await loadUserDirectory(auth);
+    const storedBuyerId = restoreStoredBuyer ? getSelectedBuyerId() : null;
+    const initialBuyerId = resolveInitialBuyerId(directory, storedBuyerId);
+    if (storedBuyerId && storedBuyerId !== initialBuyerId) clearSelectedBuyerId();
+    if (initialBuyerId) {
+      await applySelectedBuyer(directory, initialBuyerId, auth.session.token, false);
+    } else {
+      patch({
+        ...buyerBusinessReset('buyer-select'),
+        authenticatedUser: directory.user,
+        userDirectory: directory,
+        buyerSelectionRequired: true,
+        buyerSwitching: false,
+        buyerSwitchError: '',
+      });
+    }
+    return directory;
+  }, [applySelectedBuyer, patch]);
+
+  const resetFailedPocketBaseLogin = useCallback(() => {
+    beginRequest('selectedBuyer');
+    invalidateBuyerRequests();
+    clearPocketBaseSession();
+    patch({ ...initialState, deviceClient: null, prefillCode: '' });
+  }, [beginRequest, invalidateBuyerRequests, patch]);
 
   const login = useCallback((code: string, password: string, remember: boolean) => {
-    const request = isPocketBaseAuthMode()
+    // Прямая проверка env позволяет Rollup удалить legacy mock endpoint из PocketBase HTML.
+    const pocketBaseBuild = (import.meta.env.VITE_AUTH_MODE || 'pocketbase') === 'pocketbase';
+    const request = pocketBaseBuild
       ? loginWithPocketBase(code, password)
-        .then(applyPocketBaseAuth)
-        .catch((error) => { clearPocketBaseSession(); throw error; })
+        .then((auth) => applyPocketBaseAuth(auth, false))
+        .catch((error) => { resetFailedPocketBaseLogin(); throw error; })
       : api<LoginResponse>('/api/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, password }),
       }).then((resp) => { applyLoginResponse(resp); return resp; });
@@ -299,38 +441,74 @@ export function useAuth() {
       if (remember !== false) setDeviceCode(code);
       return resp;
     });
-  }, [applyLoginResponse, applyPocketBaseAuth]);
+  }, [applyLoginResponse, applyPocketBaseAuth, resetFailedPocketBaseLogin]);
 
   const restoreSession = useCallback(() => {
     if (!isPocketBaseAuthMode()) return Promise.resolve(false);
     return refreshPocketBaseSession().then((auth) => {
       if (!auth) return false;
-      return applyPocketBaseAuth(auth).then(() => true);
-    }).catch((error: unknown) => { clearPocketBaseSession(); throw error; });
-  }, [applyPocketBaseAuth]);
+      return applyPocketBaseAuth(auth, true).then(() => true);
+    }).catch((error: unknown) => { resetFailedPocketBaseLogin(); throw error; });
+  }, [applyPocketBaseAuth, resetFailedPocketBaseLogin]);
+
+  const selectBuyer = useCallback((buyerId: string): Promise<boolean> => {
+    const state = getState();
+    const directory = state.userDirectory;
+    const session = getPocketBaseSession();
+    if (!directory || !state.authenticatedUser || !session || session.userId !== directory.user.id) {
+      return Promise.reject(new AuthError('SESSION_EXPIRED', 'Сессия пользователя недоступна. Войдите снова.', 401));
+    }
+    findBuyerAccess(directory, buyerId);
+    return applySelectedBuyer(directory, buyerId, session.token);
+  }, [applySelectedBuyer, getState]);
+
+  const switchBuyer = useCallback((buyerId: string): Promise<boolean> => {
+    const state = getState();
+    if (state.selectedBuyerContext?.buyerId === buyerId) return Promise.resolve(true);
+    if (!state.userDirectory) {
+      return Promise.reject(new AuthError('NO_BUYER_ACCESS', 'Каталог доступных покупателей не загружен.', 403));
+    }
+    findBuyerAccess(state.userDirectory, buyerId);
+    if (!hasUnsavedBuyerState(state)) return selectBuyer(buyerId);
+    patch({
+      confirm: {
+        title: 'Сменить юрлицо?',
+        body: 'Корзина или несохранённые корректировки будут очищены. Данные текущего покупателя больше не будут отображаться.',
+        okText: 'Сменить юрлицо',
+        cancelText: 'Остаться',
+        danger: true,
+        onOk: () => { void selectBuyer(buyerId).catch(() => {}); },
+      },
+    });
+    return Promise.resolve(false);
+  }, [getState, patch, selectBuyer]);
 
   const doLogout = useCallback(() => {
+    beginRequest('selectedBuyer');
+    invalidateBuyerRequests();
     clearPocketBaseSession();
     clearDeviceCode();
     try { sessionStorage.removeItem('karavay_pending_login'); } catch {}
     patch({ ...initialState, deviceClient: null, prefillCode: '' });
-  }, [patch]);
+  }, [beginRequest, invalidateBuyerRequests, patch]);
 
   const logout = useCallback(() => {
     const state = getState();
-    const hasCart = Object.keys(state.cart || {}).length > 0;
-    if (!hasCart) { doLogout(); return; }
+    if (!hasUnsavedBuyerState(state)) { doLogout(); return; }
     patch({
       confirm: {
         title: 'Выйти из кабинета?',
-        body: 'В корзине есть добавленные позиции. Если выйдете сейчас, корзина будет очищена.',
+        body: 'Корзина или несохранённые корректировки будут очищены.',
         okText: 'Выйти', cancelText: 'Остаться', danger: true,
         onOk: doLogout,
       },
     });
   }, [getState, patch, doLogout]);
 
-  return { login, logout, doLogout, restoreSession, applyLoginResponse, getDeviceCode };
+  return {
+    login, logout, doLogout, restoreSession, applyLoginResponse,
+    selectBuyer, switchBuyer, getDeviceCode,
+  };
 }
 
 // ================ КОРЗИНА: лотки/штуки ================

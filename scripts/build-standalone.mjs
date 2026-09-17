@@ -11,7 +11,7 @@ const variant = argument('variant', 'demo');
 const distDir = path.join(projectRoot, argument('dist', 'standalone-dist'));
 const assetsDir = path.join(distDir, 'assets');
 const outputDir = path.join(projectRoot, 'artifacts');
-const outputPath = path.join(outputDir, argument('output', 'Karavay-LK-v3.5.html'));
+const outputPath = path.join(outputDir, argument('output', 'Karavay-LK-v3.6.html'));
 
 let html = fs.readFileSync(path.join(distDir, 'index.html'), 'utf8');
 const scriptMatch = html.match(/<script type="module" crossorigin src="\.\/assets\/([^"]+)"><\/script>/);
@@ -55,7 +55,7 @@ html = html
   .replace('./favicon.svg', `data:image/svg+xml;base64,${favicon}`)
   .replace(/\s*<link rel="preconnect"[^>]+>\s*/g, '\n  ')
   .replace(/\s*<link href="https:\/\/fonts\.googleapis\.com[^"]+"[^>]+>\s*/g, '\n  ')
-  .replace('<head>', `<head>\n  <!-- КАРАВАЙ · Личный кабинет 3.5 · ${variant === 'demo' ? 'демо' : 'PocketBase directory'} -->`);
+  .replace('<head>', `<head>\n  <!-- КАРАВАЙ · Личный кабинет 3.6 · ${variant === 'demo' ? 'демо' : 'PocketBase user access'} -->`);
 
 fs.mkdirSync(outputDir, { recursive: true });
 fs.writeFileSync(outputPath, html);

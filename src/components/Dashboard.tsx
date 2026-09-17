@@ -16,16 +16,17 @@ export default function Dashboard({ goto }: { goto: (route: Route) => void }) {
   if (!b) return null;
   const ol = currentOutletOf(state);
   if (isPocketBaseDirectoryMode()) {
-    const isBuyer = state.role === 'buyer';
+    const accessRole = state.selectedBuyerContext?.membership.role;
+    const accessRoleLabel = accessRole === 'owner' ? 'владелец' : accessRole === 'manager' ? 'менеджер' : 'просмотр';
     return (
       <>
         <div className="hero-card">
-          <h2>Здравствуйте, {esc(b.name)}!</h2>
+          <h2>Здравствуйте, {esc(state.authenticatedUser?.name || b.name)}!</h2>
           <p>
-            Вход через PocketBase выполнен. Роль: <strong>{isBuyer ? 'покупатель' : 'получатель'}</strong>.
+            Текущее юрлицо: <strong>{esc(b.name)}</strong> · роль: <strong>{accessRoleLabel}</strong>.
           </p>
           <div className="actions">
-            {isBuyer ? <button className="btn btn--primary" onClick={() => goto('outlets')}><IconPlus />Открыть получателей</button> : null}
+            <button className="btn btn--primary" onClick={() => goto('outlets')}><IconPlus />Открыть получателей</button>
             <button className="btn btn--ghost" onClick={() => goto('profile')}>Открыть профиль</button>
           </div>
         </div>
@@ -36,9 +37,9 @@ export default function Dashboard({ goto }: { goto: (route: Route) => void }) {
             <div className="kpi__hint">Токен PocketBase принят</div>
           </div>
           <div className="kpi">
-            <div className="kpi__label">Код КИС</div>
-            <div className="kpi__value">{esc(isBuyer ? b.code : ol?.code || b.code)}</div>
-            <div className="kpi__hint">Связь учётной записи</div>
+            <div className="kpi__label">Код покупателя</div>
+            <div className="kpi__value">{esc(b.code)}</div>
+            <div className="kpi__hint">Назначен через user_buyers</div>
           </div>
           <div className="kpi">
             <div className="kpi__label">Получателей</div>
@@ -50,7 +51,7 @@ export default function Dashboard({ goto }: { goto: (route: Route) => void }) {
           <h3 className="card__title">Что проверяем на этом этапе</h3>
           <p style={{ margin: 0, color: 'var(--gray-600)', lineHeight: 1.6 }}>
             Корректный вход, сохранение сессии после F5, выход и разграничение доступа.
-            Покупатель должен видеть только связанных с ним получателей, а получатель — только собственную точку.
+            Пользователь должен видеть только назначенные ему юрлица и только получателей выбранного покупателя.
           </p>
         </div>
       </>

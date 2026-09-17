@@ -147,6 +147,40 @@ a:hover{text-decoration:underline}
   .login__form-side{padding:32px 20px}
 }
 
+/* ------- USER → BUYER SELECTION ------- */
+.buyer-select-page{
+  min-height:100vh;background:linear-gradient(145deg,var(--blue-ink),var(--blue));
+  display:flex;align-items:center;justify-content:center;padding:32px 20px;
+}
+.buyer-select-card{
+  width:100%;max-width:720px;background:#fff;border-radius:var(--radius-lg);
+  padding:36px;box-shadow:var(--shadow-lg);text-align:center;
+}
+.buyer-select-card--loading{max-width:520px}
+.buyer-select-logo{width:96px;height:96px;object-fit:contain;margin:0 auto 18px}
+.buyer-select-eyebrow{margin:0 0 8px;color:var(--blue);font-weight:600;font-size:14px}
+.buyer-select-card h1{margin:0 0 10px;color:var(--blue-ink);font-size:28px}
+.buyer-select-lead{margin:0 auto 24px;max-width:580px;color:var(--gray-600)}
+.buyer-select-list{display:grid;gap:12px;text-align:left}
+.buyer-select-option{
+  width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name action" "meta action";
+  gap:3px 16px;align-items:center;padding:17px 18px;background:#fff;color:var(--ink);
+  border:1px solid var(--gray-200);border-radius:12px;cursor:pointer;text-align:left;
+  transition:border-color .15s,box-shadow .15s,background .15s;
+}
+.buyer-select-option:hover{border-color:var(--blue);background:var(--blue-soft);box-shadow:var(--shadow-sm)}
+.buyer-select-option:disabled{cursor:wait;opacity:.65}
+.buyer-select-option__name{grid-area:name;font-weight:700;color:var(--blue-ink);font-size:16px}
+.buyer-select-option__meta{grid-area:meta;color:var(--gray-600);font-size:13px}
+.buyer-select-option__action{grid-area:action;color:var(--blue);font-weight:600;font-size:13px;white-space:nowrap}
+.buyer-select-logout{margin-top:22px}
+@media (max-width:600px){
+  .buyer-select-page{padding:0;align-items:stretch}
+  .buyer-select-card{border-radius:0;padding:28px 18px;display:flex;flex-direction:column;justify-content:center}
+  .buyer-select-option{grid-template-columns:1fr;grid-template-areas:"name" "meta" "action"}
+  .buyer-select-option__action{margin-top:6px}
+}
+
 /* ------- APP LAYOUT ------- */
 .app{
   display:grid;
@@ -216,6 +250,13 @@ a:hover{text-decoration:underline}
 }
 .topbar__title{font-size:22px;font-weight:700;color:var(--blue-ink);margin:0}
 .topbar__spacer{flex:1}
+.buyer-switcher{display:flex;align-items:center;gap:8px;color:var(--gray-600);font-size:12px;font-weight:600}
+.buyer-switcher select{
+  max-width:310px;height:38px;border:1px solid var(--blue-line);border-radius:9px;
+  background:#fff;color:var(--blue-ink);padding:0 32px 0 10px;font:inherit;font-size:13px;
+}
+.buyer-switcher select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(4,63,136,.1)}
+.buyer-switcher select:disabled{opacity:1;color:var(--blue-ink);background:var(--gray-50)}
 .topbar__user{
   display:flex;align-items:center;gap:12px;padding:6px 12px;
   border-radius:10px;background:var(--gray-100);
@@ -574,6 +615,8 @@ a:hover{text-decoration:underline}
   /* прячем данные покупателя (юрлицо, код, роль) в шапке */
   .topbar__user{display:none}
   .topbar__title{display:none}
+  .buyer-switcher span{display:none}
+  .buyer-switcher select{max-width:58vw}
 }
 
 /* v1.2: конфирм-модалка в фирменных цветах --------------------------------- */

@@ -15,29 +15,31 @@ export default function Profile({ goto }: { goto: (route: Route) => void }) {
 
   if (isPocketBaseDirectoryMode()) {
     const current = currentOutletOf(state);
+    const accessRole = state.selectedBuyerContext?.membership.role;
+    const accessRoleLabel = accessRole === 'owner' ? 'Владелец' : accessRole === 'manager' ? 'Менеджер' : 'Просмотр';
     return (
       <>
         <div className="grid grid-2">
           <div className="card">
-            <h3 className="card__title">Покупатель из PocketBase</h3>
+            <h3 className="card__title">Пользователь и доступ</h3>
             <dl className="dl">
-              <dt>Наименование</dt><dd>{esc(b.name)}</dd>
-              <dt>Код КИС</dt><dd><strong>{esc(b.code)}</strong></dd>
-              <dt>ID КИС</dt><dd>{b.Id_pay}</dd>
-              <dt>Роль входа</dt><dd>{state.role === 'buyer' ? 'Покупатель' : 'Получатель'}</dd>
+              <dt>Пользователь</dt><dd>{esc(state.authenticatedUser?.name)}</dd>
+              <dt>Логин</dt><dd><strong>{esc(state.authenticatedUser?.login)}</strong></dd>
+              <dt>Юрлицо</dt><dd>{esc(b.name)}</dd>
+              <dt>Роль</dt><dd>{accessRoleLabel}</dd>
             </dl>
           </div>
           <div className="card">
-            <h3 className="card__title">Текущий доступ</h3>
+            <h3 className="card__title">Выбранный покупатель</h3>
             <dl className="dl">
+              <dt>Код КИС</dt><dd><strong>{esc(b.code)}</strong></dd>
+              <dt>ID КИС</dt><dd>{b.Id_pay}</dd>
               <dt>Получателей</dt><dd>{state.outlets.length}</dd>
               <dt>Текущая точка</dt><dd>{current ? esc(current.name) : '—'}</dd>
-              <dt>Код точки</dt><dd>{current ? esc(current.code) : '—'}</dd>
-              <dt>Адрес</dt><dd>{current ? esc(current.address) : '—'}</dd>
             </dl>
           </div>
         </div>
-        {state.role === 'buyer' && state.outlets.length ? (
+        {state.outlets.length ? (
           <div className="card" style={{ marginTop: 20 }}>
             <h3 className="card__title">Связанные получатели</h3>
             <div className="recipient-list">
@@ -50,7 +52,7 @@ export default function Profile({ goto }: { goto: (route: Route) => void }) {
         <div className="card" style={{ marginTop: 20 }}>
           <h3 className="card__title">Граница этапа</h3>
           <p style={{ margin: 0, color: 'var(--gray-600)', lineHeight: 1.6 }}>
-            Эти данные загружены из PocketBase. Договор, сальдо, цены, матрица, заказы и документы появятся только после подключения серверного API КИС.
+            Пользователь, его связи, выбранный покупатель и получатели загружены из PocketBase. Договор, сальдо, цены, матрица, заказы и документы появятся только после подключения серверного API КИС.
           </p>
         </div>
       </>

@@ -1,35 +1,29 @@
 import { runtimeConfig } from './runtimeConfig';
 import type { RuntimeConfig } from './runtimeConfig';
-import type { Role } from './types';
+import type { AuthenticatedUser } from './types';
 
-const SESSION_KEY = 'karavay_pocketbase_session_v1';
+const SESSION_KEY = 'karavay_pocketbase_user_session_v2';
+const SELECTED_BUYER_KEY = 'karavay_selected_buyer_v1';
 
 export interface PocketBaseSession {
   token: string;
   collection: string;
-  role: Role;
-  kisCode: string;
+  userId: string;
+  login: string;
 }
 
-export interface PocketBaseRecord {
+export interface PocketBaseUserRecord {
   id?: unknown;
-  active?: boolean;
-  kis_code?: unknown;
-  kis_id?: unknown;
+  login?: unknown;
   name?: unknown;
-  address?: unknown;
-  buyer?: unknown;
-  min_order_sum?: unknown;
-  manager?: unknown;
-  manager_phone?: unknown;
-  inn?: unknown;
-  contact_email?: unknown;
-  must_change_password?: boolean;
+  active?: unknown;
+  must_change_password?: unknown;
 }
 
 export interface PocketBaseAuthResult {
   session: PocketBaseSession;
-  record: PocketBaseRecord;
+  user: AuthenticatedUser;
+  record: PocketBaseUserRecord;
 }
 
 export interface StorageLike {
@@ -53,7 +47,7 @@ interface RequiredAuthOptions {
 
 interface PocketBasePayload {
   token?: unknown;
-  record?: PocketBaseRecord;
+  record?: unknown;
   message?: unknown;
   data?: Record<string, unknown>;
 }
@@ -82,7 +76,7 @@ function collectionPath(config: RuntimeConfig, collection: string, action: strin
 async function readJson(response: Response): Promise<PocketBasePayload> {
   try {
     const value: unknown = await response.json();
-    return value && typeof value === 'object' ? value as PocketBasePayload : {};
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as PocketBasePayload : {};
   } catch {
     return {};
   }
@@ -129,47 +123,60 @@ async function fetchWithDeadline(
   }
 }
 
-async function authenticateCollection(
-  collection: string,
-  identity: string,
-  password: string,
-  options: RequiredAuthOptions,
-): Promise<PocketBasePayload> {
-  const response = await fetchWithDeadline(collectionPath(options.config, collection, 'auth-with-password'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identity, password }),
-  }, options);
-  const payload = await readJson(response);
-  if (!response.ok) {
-    throw new AuthError(
-      response.status === 400 ? 'INVALID_CREDENTIALS' : 'POCKETBASE_ERROR',
-      messageFromPocketBase(payload, 'Не удалось выполнить вход через PocketBase.'),
-      response.status,
-    );
+function asUserRecord(value: unknown): PocketBaseUserRecord {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AuthError('INVALID_USER_SCHEMA', 'PocketBase вернул запись пользователя неверного формата.', 422);
   }
-  if (typeof payload.token !== 'string' || !payload.record) {
-    throw new AuthError('INVALID_RESPONSE', 'PocketBase вернул неполный ответ авторизации.', response.status);
-  }
-  return payload;
+  return value as PocketBaseUserRecord;
 }
 
-function authResultFromPayload(payload: PocketBasePayload, collection: string, config: RuntimeConfig): PocketBaseAuthResult {
-  const record = payload.record;
-  if (!record || typeof payload.token !== 'string') {
-    throw new AuthError('INVALID_RESPONSE', 'PocketBase вернул неполный ответ авторизации.');
+function requiredText(value: unknown, field: string): string {
+  const result = typeof value === 'string' ? value.trim() : '';
+  if (!result) throw new AuthError('INVALID_USER_SCHEMA', `У пользователя не заполнено поле ${field}.`, 422);
+  return result;
+}
+
+export function authenticatedUserFromRecord(value: unknown): AuthenticatedUser {
+  const record = asUserRecord(value);
+  const id = requiredText(record.id, 'id');
+  if (!/^[A-Za-z0-9]+$/.test(id)) {
+    throw new AuthError('INVALID_USER_SCHEMA', 'PocketBase id пользователя имеет неверный формат.', 422);
   }
-  if (record.active === false) throw new AuthError('ACCOUNT_DISABLED', 'Учётная запись отключена администратором.', 403);
+  if (record.active === false) {
+    throw new AuthError('ACCOUNT_DISABLED', 'Учётная запись отключена администратором.', 403);
+  }
+  if (record.active !== true) {
+    throw new AuthError('INVALID_USER_SCHEMA', 'У пользователя отсутствует корректный флаг active.', 422);
+  }
   if (record.must_change_password === true) {
     throw new AuthError('PASSWORD_CHANGE_REQUIRED', 'Для учётной записи требуется смена временного пароля.', 403);
   }
+  if (record.must_change_password !== false) {
+    throw new AuthError('INVALID_USER_SCHEMA', 'У пользователя отсутствует корректный флаг must_change_password.', 422);
+  }
+  return {
+    id,
+    login: requiredText(record.login, 'login'),
+    name: requiredText(record.name, 'name'),
+    active: true,
+    mustChangePassword: false,
+  };
+}
+
+function authResultFromPayload(payload: PocketBasePayload, config: RuntimeConfig): PocketBaseAuthResult {
+  if (typeof payload.token !== 'string' || !payload.token) {
+    throw new AuthError('INVALID_RESPONSE', 'PocketBase вернул неполный ответ авторизации.');
+  }
+  const record = asUserRecord(payload.record);
+  const user = authenticatedUserFromRecord(record);
   return {
     session: {
       token: payload.token,
-      collection,
-      role: collection === config.buyersCollection ? 'buyer' : 'outlet',
-      kisCode: String(record.kis_code || '').trim(),
+      collection: config.usersCollection,
+      userId: user.id,
+      login: user.login,
     },
+    user,
     record,
   };
 }
@@ -179,8 +186,8 @@ function isPocketBaseSession(value: unknown): value is PocketBaseSession {
   const session = value as Partial<PocketBaseSession>;
   return typeof session.token === 'string' && Boolean(session.token)
     && typeof session.collection === 'string' && Boolean(session.collection)
-    && (session.role === 'buyer' || session.role === 'outlet')
-    && typeof session.kisCode === 'string' && Boolean(session.kisCode);
+    && typeof session.userId === 'string' && Boolean(session.userId)
+    && typeof session.login === 'string' && Boolean(session.login);
 }
 
 export function savePocketBaseSession(session: PocketBaseSession, storage?: StorageLike): void {
@@ -198,35 +205,51 @@ export function getPocketBaseSession(storage?: StorageLike): PocketBaseSession |
   }
 }
 
+export function saveSelectedBuyerId(buyerId: string, storage?: StorageLike): void {
+  const value = String(buyerId || '').trim();
+  if (!value) throw new AuthError('INVALID_BUYER_SELECTION', 'Не выбран покупатель.', 422);
+  storageOf(storage)?.setItem(SELECTED_BUYER_KEY, value);
+}
+
+export function getSelectedBuyerId(storage?: StorageLike): string | null {
+  const value = storageOf(storage)?.getItem(SELECTED_BUYER_KEY) || '';
+  return value.trim() || null;
+}
+
+export function clearSelectedBuyerId(storage?: StorageLike): void {
+  storageOf(storage)?.removeItem(SELECTED_BUYER_KEY);
+}
+
 export function clearPocketBaseSession(storage?: StorageLike): void {
-  storageOf(storage)?.removeItem(SESSION_KEY);
+  const target = storageOf(storage);
+  target?.removeItem(SESSION_KEY);
+  target?.removeItem(SELECTED_BUYER_KEY);
 }
 
 export async function loginWithPocketBase(identity: string, password: string, options: AuthOptions = {}): Promise<PocketBaseAuthResult> {
   const config = options.config || runtimeConfig;
   const fetchImpl = options.fetchImpl || fetch;
   const cleanIdentity = String(identity || '').trim();
-  if (!cleanIdentity || !password) throw new AuthError('MISSING_CREDENTIALS', 'Введите код и пароль.');
+  if (!cleanIdentity || !password) throw new AuthError('MISSING_CREDENTIALS', 'Введите логин и пароль.');
 
-  let payload: PocketBasePayload;
-  let collection = config.buyersCollection;
-  try {
-    payload = await authenticateCollection(collection, cleanIdentity, password, { fetchImpl, config });
-  } catch (buyerError: unknown) {
-    if (!(buyerError instanceof AuthError) || buyerError.code !== 'INVALID_CREDENTIALS') throw buyerError;
-    collection = config.outletsCollection;
-    try {
-      payload = await authenticateCollection(collection, cleanIdentity, password, { fetchImpl, config });
-    } catch (outletError: unknown) {
-      if (outletError instanceof AuthError && outletError.code === 'INVALID_CREDENTIALS') {
-        throw new AuthError('INVALID_CREDENTIALS', 'Неверный код или пароль.', 400);
-      }
-      throw outletError;
-    }
+  const response = await fetchWithDeadline(collectionPath(config, config.usersCollection, 'auth-with-password'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identity: cleanIdentity, password }),
+  }, { fetchImpl, config });
+  const payload = await readJson(response);
+  if (!response.ok) {
+    throw new AuthError(
+      response.status === 400 ? 'INVALID_CREDENTIALS' : 'POCKETBASE_ERROR',
+      response.status === 400
+        ? 'Неверный логин или пароль.'
+        : messageFromPocketBase(payload, 'Не удалось выполнить вход через PocketBase.'),
+      response.status,
+    );
   }
 
-  const result = authResultFromPayload(payload, collection, config);
-  if (!result.session.kisCode) throw new AuthError('MISSING_KIS_CODE', 'У учётной записи не заполнено поле kis_code.', 422);
+  const result = authResultFromPayload(payload, config);
+  clearSelectedBuyerId(options.storage);
   savePocketBaseSession(result.session, options.storage);
   return result;
 }
@@ -236,8 +259,12 @@ export async function refreshPocketBaseSession(options: AuthOptions = {}): Promi
   const fetchImpl = options.fetchImpl || fetch;
   const current = getPocketBaseSession(options.storage);
   if (!current) return null;
+  if (current.collection !== config.usersCollection) {
+    clearPocketBaseSession(options.storage);
+    throw new AuthError('SESSION_EXPIRED', 'Сессия относится к устаревшей схеме входа. Войдите снова.', 401);
+  }
 
-  const response = await fetchWithDeadline(collectionPath(config, current.collection, 'auth-refresh'), {
+  const response = await fetchWithDeadline(collectionPath(config, config.usersCollection, 'auth-refresh'), {
     method: 'POST',
     headers: { Authorization: current.token },
   }, { fetchImpl, config });
@@ -246,13 +273,13 @@ export async function refreshPocketBaseSession(options: AuthOptions = {}): Promi
     clearPocketBaseSession(options.storage);
     throw new AuthError('SESSION_EXPIRED', 'Сессия истекла. Войдите снова.', response.status);
   }
-  const result = authResultFromPayload(payload, current.collection, config);
-  if (!result.session.kisCode) {
+  const result = authResultFromPayload(payload, config);
+  if (result.user.id !== current.userId) {
     clearPocketBaseSession(options.storage);
-    throw new AuthError('MISSING_KIS_CODE', 'У учётной записи не заполнено поле kis_code.', 422);
+    throw new AuthError('SESSION_USER_MISMATCH', 'PocketBase вернул сессию другого пользователя.', 409);
   }
   savePocketBaseSession(result.session, options.storage);
   return result;
 }
 
-export { SESSION_KEY };
+export { SELECTED_BUYER_KEY, SESSION_KEY };

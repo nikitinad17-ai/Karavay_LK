@@ -20,7 +20,7 @@ async function openCatalog(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByRole('heading', { name: /Каталог продукции/ });
 }
 
-describe('React 3.5 TypeScript', () => {
+describe('React 3.6 TypeScript', () => {
   test('открывает проверку заказа и возвращается без потери корзины', async () => {
     const user = await renderLoggedIn();
     await openCatalog(user);

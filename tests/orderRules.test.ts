@@ -8,6 +8,7 @@ import { snapshotOrder } from '../src/utils';
 import type { AppState, Order, Outlet, Product } from '../src/types';
 
 const outlet: Outlet = {
+  recordId: null, buyerRecordId: null,
   id: 1, id_clt: 1001, minOrderSum: 100, name: 'Точка', code: 'M-1', address: '', rep: null,
   days: [], daysLabel: '', phones: [], repPhone: null, receiver: null, dispatchPhone: null, dispatchPlatformName: null,
 };

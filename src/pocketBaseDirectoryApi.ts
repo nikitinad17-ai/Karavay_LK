@@ -1,8 +1,10 @@
 import { AuthError } from './authApi';
-import type { FetchLike, PocketBaseAuthResult, PocketBaseRecord } from './authApi';
+import type { FetchLike, PocketBaseAuthResult } from './authApi';
 import { runtimeConfig } from './runtimeConfig';
 import type { RuntimeConfig } from './runtimeConfig';
-import type { KisClient, KisPayer, LoginResponse } from './types';
+import type {
+  Buyer, BuyerAccessRole, BuyerMembership, Outlet, SelectedBuyerContext, UserBuyerAccess, UserDirectory,
+} from './types';
 
 interface DirectoryOptions {
   config?: RuntimeConfig;
@@ -16,11 +18,29 @@ interface PocketBaseListPayload {
   message?: unknown;
 }
 
-const DIRECTORY_FIELDS = [
-  'id', 'kis_code', 'kis_id', 'name', 'address', 'buyer', 'active',
-  'must_change_password', 'min_order_sum', 'manager', 'manager_phone',
-  'inn', 'contact_email',
+interface PocketBaseDirectoryRecord {
+  id?: unknown;
+  user?: unknown;
+  buyer?: unknown;
+  role?: unknown;
+  active?: unknown;
+  kis_code?: unknown;
+  kis_id?: unknown;
+  name?: unknown;
+  address?: unknown;
+  min_order_sum?: unknown;
+  manager?: unknown;
+  manager_phone?: unknown;
+  inn?: unknown;
+  contact_email?: unknown;
+}
+
+const MEMBERSHIP_FIELDS = ['id', 'user', 'buyer', 'role', 'active'].join(',');
+const BUYER_FIELDS = [
+  'id', 'kis_code', 'kis_id', 'name', 'active', 'min_order_sum',
+  'manager', 'manager_phone', 'inn', 'contact_email',
 ].join(',');
+const OUTLET_FIELDS = ['id', 'kis_code', 'kis_id', 'name', 'address', 'buyer', 'active', 'min_order_sum'].join(',');
 
 function requestId(): string {
   try { return globalThis.crypto.randomUUID(); } catch { return `directory-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
@@ -56,12 +76,12 @@ async function requestJson(
     });
     const payload = await readJson(response);
     if (!response.ok) {
-      const code = response.status === 403 || response.status === 404
+      const code = response.status === 401 || response.status === 403 || response.status === 404
         ? 'DIRECTORY_ACCESS_DENIED'
         : 'DIRECTORY_ERROR';
       throw new AuthError(
         code,
-        responseMessage(payload, 'Не удалось получить профиль из PocketBase.'),
+        responseMessage(payload, 'Не удалось получить каталог доступа из PocketBase.'),
         response.status,
       );
     }
@@ -77,11 +97,18 @@ async function requestJson(
   }
 }
 
-function asRecord(value: unknown, label: string): PocketBaseRecord {
+function asRecord(value: unknown, label: string): PocketBaseDirectoryRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new AuthError('DIRECTORY_INVALID_RECORD', `${label}: PocketBase вернул запись неверного формата.`, 422);
   }
-  return value as PocketBaseRecord;
+  return value as PocketBaseDirectoryRecord;
+}
+
+function listPayload(value: unknown, label: string): PocketBaseListPayload {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AuthError('DIRECTORY_INVALID_RESPONSE', `${label}: PocketBase вернул неверный список.`, 502);
+  }
+  return value as PocketBaseListPayload;
 }
 
 function requiredText(value: unknown, field: string, label: string): string {
@@ -95,6 +122,24 @@ function optionalText(value: unknown): string | null {
   return result || null;
 }
 
+function requiredPocketBaseId(value: unknown, field: string, label: string): string {
+  const id = requiredText(value, field, label);
+  if (!/^[A-Za-z0-9]+$/.test(id)) {
+    throw new AuthError('DIRECTORY_INVALID_RECORD', `${label}: поле ${field} имеет неверный формат.`, 422);
+  }
+  return id;
+}
+
+function relationId(value: unknown, field: string, label: string): string {
+  if (Array.isArray(value)) {
+    if (value.length !== 1) {
+      throw new AuthError('DIRECTORY_INVALID_RECORD', `${label}: связь ${field} должна содержать одну запись.`, 422);
+    }
+    return requiredPocketBaseId(value[0], field, label);
+  }
+  return requiredPocketBaseId(value, field, label);
+}
+
 function requiredKisId(value: unknown, label: string): number {
   const result = typeof value === 'number' ? value : Number(value);
   if (!Number.isSafeInteger(result) || result <= 0) {
@@ -103,159 +148,271 @@ function requiredKisId(value: unknown, label: string): number {
   return result;
 }
 
-function nonNegativeNumber(value: unknown): number {
+function nonNegativeNumber(value: unknown, field: string, label: string): number {
   const result = typeof value === 'number' ? value : Number(value || 0);
-  return Number.isFinite(result) && result >= 0 ? result : 0;
-}
-
-function recordId(record: PocketBaseRecord, label: string): string {
-  const id = requiredText(record.id, 'id', label);
-  if (!/^[A-Za-z0-9]+$/.test(id)) {
-    throw new AuthError('DIRECTORY_INVALID_RECORD', `${label}: PocketBase id имеет неверный формат.`, 422);
-  }
-  return id;
-}
-
-function relationId(value: unknown, label: string): string {
-  const relation = Array.isArray(value) ? value[0] : value;
-  return recordId({ id: relation }, label);
-}
-
-function recordLabel(record: PocketBaseRecord, fallback: string): string {
-  return optionalText(record.kis_code) || fallback;
-}
-
-function assertUsable(record: PocketBaseRecord, label: string): void {
-  if (record.active === false) throw new AuthError('ACCOUNT_DISABLED', `${label}: учётная запись отключена.`, 403);
-  if (record.must_change_password === true) {
-    throw new AuthError('PASSWORD_CHANGE_REQUIRED', `${label}: требуется смена временного пароля.`, 403);
-  }
-}
-
-function toKisClient(record: PocketBaseRecord): KisClient {
-  const label = `Получатель ${recordLabel(record, '')}`.trim();
-  assertUsable(record, label);
-  const kisId = requiredKisId(record.kis_id, label);
-  return {
-    lk_id: kisId,
-    id_clt: kisId,
-    KodClt: requiredText(record.kis_code, 'kis_code', label),
-    NameClt: requiredText(record.name, 'name', label),
-    Adres: optionalText(record.address) || '',
-    OrdLimitMinSum: nonNegativeNumber(record.min_order_sum),
-    TorgPred: null,
-    lk_days: [],
-    lk_phones: [],
-    lk_repPhone: null,
-    lk_receiver: null,
-    lk_dispatchPhone: null,
-    lk_dispatchPlatformName: null,
-  };
-}
-
-function toKisPayer(record: PocketBaseRecord, outlets: PocketBaseRecord[]): KisPayer {
-  const label = `Покупатель ${recordLabel(record, '')}`.trim();
-  assertUsable(record, label);
-  const kisId = requiredKisId(record.kis_id, label);
-  const name = requiredText(record.name, 'name', label);
-  return {
-    lk_id: kisId,
-    Id_pay: kisId,
-    KodPay: requiredText(record.kis_code, 'kis_code', label),
-    NamePay: name,
-    Adres: name,
-    Manager: optionalText(record.manager),
-    lk_managerPhone: optionalText(record.manager_phone),
-    lk_inn: optionalText(record.inn),
-    lk_email: optionalText(record.contact_email),
-    OrdLimitMinSum: nonNegativeNumber(record.min_order_sum),
-    SumOutSaldoCalc: 0,
-    lk_hasContract: true,
-    lk_paymentDeferralDays: 0,
-    lk_shipmentMode: 'allowed',
-    lk_shipmentEffective: 'allowed',
-    Clients: outlets.map(toKisClient),
-  };
-}
-
-function listPayload(value: unknown): PocketBaseListPayload {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new AuthError('DIRECTORY_INVALID_RESPONSE', 'PocketBase вернул неверный список получателей.', 502);
-  }
-  return value as PocketBaseListPayload;
-}
-
-async function loadBuyerOutlets(
-  buyerRecordId: string,
-  token: string,
-  config: RuntimeConfig,
-  fetchImpl: FetchLike,
-): Promise<PocketBaseRecord[]> {
-  const filter = `buyer = "${buyerRecordId}" && active = true && must_change_password = false`;
-  const result: PocketBaseRecord[] = [];
-  let totalPages = 1;
-  for (let page = 1; page <= totalPages; page += 1) {
-    const query = new URLSearchParams({
-      page: String(page),
-      perPage: '200',
-      sort: 'kis_code',
-      filter,
-      fields: `page,totalPages,items.${DIRECTORY_FIELDS.split(',').join(',items.')}`,
-    });
-    const payload = listPayload(await requestJson(
-      `${recordsPath(config, config.outletsCollection)}?${query}`,
-      token,
-      config,
-      fetchImpl,
-    ));
-    if (!Array.isArray(payload.items)) {
-      throw new AuthError('DIRECTORY_INVALID_RESPONSE', 'PocketBase не вернул массив получателей.', 502);
-    }
-    totalPages = Number(payload.totalPages || 1);
-    if (!Number.isSafeInteger(totalPages) || totalPages < 1 || totalPages > 25) {
-      throw new AuthError('DIRECTORY_INVALID_RESPONSE', 'PocketBase вернул неверное число страниц получателей.', 502);
-    }
-    result.push(...payload.items.map((item) => asRecord(item, 'Получатель')));
+  if (!Number.isFinite(result) || result < 0) {
+    throw new AuthError('DIRECTORY_INVALID_RECORD', `${label}: поле ${field} должно быть неотрицательным числом.`, 422);
   }
   return result;
 }
 
-async function loadParentBuyer(
-  buyerRecordId: string,
+function requireActive(value: unknown, label: string): void {
+  if (value === false) throw new AuthError('DIRECTORY_ACCESS_DENIED', `${label}: запись отключена.`, 403);
+  if (value !== true) {
+    throw new AuthError('DIRECTORY_INVALID_RECORD', `${label}: отсутствует корректный флаг active.`, 422);
+  }
+}
+
+function membershipRole(value: unknown, label: string): BuyerAccessRole {
+  if (value === 'owner' || value === 'manager' || value === 'viewer') return value;
+  throw new AuthError('DIRECTORY_INVALID_RECORD', `${label}: неизвестная роль доступа.`, 422);
+}
+
+function toMembership(value: unknown, expectedUserId: string): BuyerMembership | null {
+  const record = asRecord(value, 'Связь пользователя с покупателем');
+  const label = `Связь ${optionalText(record.id) || ''}`.trim();
+  const userId = relationId(record.user, 'user', label);
+  if (userId !== expectedUserId) {
+    throw new AuthError('DIRECTORY_SCOPE_VIOLATION', 'PocketBase вернул связь другого пользователя.', 403);
+  }
+  if (record.active === false) return null;
+  if (record.active !== true) {
+    throw new AuthError('DIRECTORY_INVALID_RECORD', `${label}: отсутствует корректный флаг active.`, 422);
+  }
+  return {
+    id: requiredPocketBaseId(record.id, 'id', label),
+    userId,
+    buyerId: relationId(record.buyer, 'buyer', label),
+    role: membershipRole(record.role, label),
+    active: true,
+  };
+}
+
+function toBuyer(value: unknown): Buyer {
+  const record = asRecord(value, 'Покупатель');
+  const recordId = requiredPocketBaseId(record.id, 'id', 'Покупатель');
+  const label = `Покупатель ${optionalText(record.kis_code) || recordId}`;
+  requireActive(record.active, label);
+  const kisId = requiredKisId(record.kis_id, label);
+  const name = requiredText(record.name, 'name', label);
+  return {
+    recordId,
+    id: kisId,
+    Id_pay: kisId,
+    code: requiredText(record.kis_code, 'kis_code', label),
+    name,
+    legal: name,
+    manager: optionalText(record.manager),
+    managerPhone: optionalText(record.manager_phone),
+    balance: 0,
+    minOrderSum: nonNegativeNumber(record.min_order_sum, 'min_order_sum', label),
+    shipmentRule: null,
+    inn: optionalText(record.inn),
+    segment: null,
+    hasContract: true,
+    contractNumber: null,
+    contractDate: null,
+    paymentDeferralDays: 0,
+    email: optionalText(record.contact_email),
+    sinceYear: null,
+    shipmentMode: 'allowed',
+    shipmentBlockReason: null,
+    shipmentEffective: 'allowed',
+    shipmentEffectiveReason: null,
+    shipmentEffectiveCause: null,
+    usesEdi: false,
+    ediClientCode: null,
+    badges: [],
+    outlets: [],
+  };
+}
+
+function toOutlet(value: unknown, expectedBuyerId: string): Outlet {
+  const record = asRecord(value, 'Получатель');
+  const recordId = requiredPocketBaseId(record.id, 'id', 'Получатель');
+  const label = `Получатель ${optionalText(record.kis_code) || recordId}`;
+  requireActive(record.active, label);
+  const buyerRecordId = relationId(record.buyer, 'buyer', label);
+  if (buyerRecordId !== expectedBuyerId) {
+    throw new AuthError('DIRECTORY_SCOPE_VIOLATION', `${label}: связь buyer не совпадает с выбранным покупателем.`, 403);
+  }
+  const kisId = requiredKisId(record.kis_id, label);
+  return {
+    recordId,
+    buyerRecordId,
+    id: kisId,
+    id_clt: kisId,
+    code: requiredText(record.kis_code, 'kis_code', label),
+    name: requiredText(record.name, 'name', label),
+    address: optionalText(record.address) || '',
+    minOrderSum: nonNegativeNumber(record.min_order_sum, 'min_order_sum', label),
+    rep: null,
+    days: [],
+    daysLabel: '',
+    phones: [],
+    repPhone: null,
+    receiver: null,
+    dispatchPhone: null,
+    dispatchPlatformName: null,
+  };
+}
+
+async function loadPagedRecords(
+  path: string,
+  fields: string,
   token: string,
   config: RuntimeConfig,
   fetchImpl: FetchLike,
-): Promise<PocketBaseRecord> {
-  const query = new URLSearchParams({ fields: DIRECTORY_FIELDS });
-  return asRecord(await requestJson(
-    `${recordsPath(config, config.buyersCollection, `/${encodeURIComponent(buyerRecordId)}`)}?${query}`,
+  label: string,
+): Promise<unknown[]> {
+  const result: unknown[] = [];
+  let totalPages = 1;
+  for (let page = 1; page <= totalPages; page += 1) {
+    const separator = path.includes('?') ? '&' : '?';
+    const query = new URLSearchParams({
+      page: String(page),
+      perPage: '200',
+      fields: `page,totalPages,items.${fields.split(',').join(',items.')}`,
+    });
+    const payload = listPayload(await requestJson(`${path}${separator}${query}`, token, config, fetchImpl), label);
+    if (!Array.isArray(payload.items)) {
+      throw new AuthError('DIRECTORY_INVALID_RESPONSE', `${label}: PocketBase не вернул массив items.`, 502);
+    }
+    totalPages = Number(payload.totalPages || 1);
+    if (!Number.isSafeInteger(totalPages) || totalPages < 1 || totalPages > 50) {
+      throw new AuthError('DIRECTORY_INVALID_RESPONSE', `${label}: PocketBase вернул неверное число страниц.`, 502);
+    }
+    result.push(...payload.items);
+  }
+  return result;
+}
+
+async function loadMemberships(
+  userId: string,
+  token: string,
+  config: RuntimeConfig,
+  fetchImpl: FetchLike,
+): Promise<BuyerMembership[]> {
+  const query = new URLSearchParams({
+    sort: 'buyer',
+    filter: `user = "${userId}" && active = true`,
+  });
+  const raw = await loadPagedRecords(
+    `${recordsPath(config, config.userBuyersCollection)}?${query}`,
+    MEMBERSHIP_FIELDS,
     token,
     config,
     fetchImpl,
-  ), 'Покупатель');
+    'Связи пользователя',
+  );
+  const memberships = raw.map((item) => toMembership(item, userId)).filter((item): item is BuyerMembership => Boolean(item));
+  const uniqueBuyers = new Set(memberships.map((item) => item.buyerId));
+  if (uniqueBuyers.size !== memberships.length) {
+    throw new AuthError('DIRECTORY_DUPLICATE_ACCESS', 'Обнаружены дублирующиеся связи user + buyer.', 422);
+  }
+  return memberships;
 }
 
-export async function loadPocketBaseDirectory(
-  auth: PocketBaseAuthResult,
+async function loadBuyer(
+  buyerId: string,
+  token: string,
+  config: RuntimeConfig,
+  fetchImpl: FetchLike,
+): Promise<Buyer> {
+  const query = new URLSearchParams({ fields: BUYER_FIELDS });
+  const value = await requestJson(
+    `${recordsPath(config, config.buyersCollection, `/${encodeURIComponent(buyerId)}`)}?${query}`,
+    token,
+    config,
+    fetchImpl,
+  );
+  const buyer = toBuyer(value);
+  if (buyer.recordId !== buyerId) {
+    throw new AuthError('DIRECTORY_SCOPE_VIOLATION', 'PocketBase вернул другого покупателя.', 403);
+  }
+  return buyer;
+}
+
+export async function loadBuyerOutlets(
+  buyerId: string,
+  token: string,
   options: DirectoryOptions = {},
-): Promise<LoginResponse> {
+): Promise<Outlet[]> {
   const config = options.config || runtimeConfig;
   const fetchImpl = options.fetchImpl || fetch;
-  const { session, record } = auth;
-  const ownRecordId = recordId(record, session.role === 'buyer' ? 'Покупатель' : 'Получатель');
+  const query = new URLSearchParams({
+    sort: 'kis_code',
+    filter: `buyer = "${buyerId}" && active = true`,
+  });
+  const raw = await loadPagedRecords(
+    `${recordsPath(config, config.outletsCollection)}?${query}`,
+    OUTLET_FIELDS,
+    token,
+    config,
+    fetchImpl,
+    'Получатели',
+  );
+  return raw.map((item) => toOutlet(item, buyerId));
+}
 
-  if (session.role === 'buyer') {
-    const outlets = await loadBuyerOutlets(ownRecordId, session.token, config, fetchImpl);
-    return { role: 'buyer', payer: toKisPayer(record, outlets) };
+export async function loadUserDirectory(
+  auth: PocketBaseAuthResult,
+  options: DirectoryOptions = {},
+): Promise<UserDirectory> {
+  const config = options.config || runtimeConfig;
+  const fetchImpl = options.fetchImpl || fetch;
+  if (auth.session.userId !== auth.user.id) {
+    throw new AuthError('SESSION_USER_MISMATCH', 'Сессия и пользователь PocketBase не совпадают.', 409);
   }
+  const memberships = await loadMemberships(auth.user.id, auth.session.token, config, fetchImpl);
+  if (!memberships.length) {
+    throw new AuthError('NO_BUYER_ACCESS', 'Пользователю не назначен доступ ни к одному покупателю.', 403);
+  }
+  const buyers = await Promise.all(memberships.map((membership) => (
+    loadBuyer(membership.buyerId, auth.session.token, config, fetchImpl)
+  )));
+  const accesses: UserBuyerAccess[] = memberships.map((membership, index) => ({
+    membership,
+    buyer: buyers[index],
+  }));
+  return { user: auth.user, accesses };
+}
 
-  const parentId = relationId(record.buyer, 'Получатель: связь buyer');
-  const buyer = await loadParentBuyer(parentId, session.token, config, fetchImpl);
-  const client = toKisClient(record);
+export function findBuyerAccess(directory: UserDirectory, buyerId: string): UserBuyerAccess {
+  const access = directory.accesses.find((item) => (
+    item.membership.active
+    && item.membership.userId === directory.user.id
+    && item.membership.buyerId === buyerId
+    && item.buyer.recordId === buyerId
+  ));
+  if (!access) {
+    throw new AuthError('INVALID_BUYER_SELECTION', 'Нет доступа к выбранному покупателю.', 403);
+  }
+  return access;
+}
+
+export function resolveInitialBuyerId(directory: UserDirectory, storedBuyerId: string | null): string | null {
+  if (storedBuyerId) {
+    const stored = directory.accesses.find((item) => item.membership.buyerId === storedBuyerId);
+    if (stored) return storedBuyerId;
+  }
+  return directory.accesses.length === 1 ? directory.accesses[0].membership.buyerId : null;
+}
+
+export async function loadSelectedBuyerContext(
+  directory: UserDirectory,
+  buyerId: string,
+  token: string,
+  options: DirectoryOptions = {},
+): Promise<SelectedBuyerContext> {
+  const access = findBuyerAccess(directory, buyerId);
+  const outlets = await loadBuyerOutlets(buyerId, token, options);
+  const buyer = { ...access.buyer, outlets: outlets.map((outlet) => ({ ...outlet })) };
   return {
-    role: 'outlet',
-    payer: toKisPayer(buyer, [record]),
-    client,
-    enteredOutletId: client.lk_id,
+    userId: directory.user.id,
+    buyerId,
+    membership: { ...access.membership },
+    buyer,
+    outlets,
   };
 }

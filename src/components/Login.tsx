@@ -2,12 +2,15 @@ import { useState, useEffect, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { useStore, useAuth } from '../store';
 import { getDeviceCode, api } from '../utils';
-import { getPocketBaseSession } from '../authApi';
+import { AuthError, getPocketBaseSession } from '../authApi';
 import { isMockAuthMode, isPocketBaseAuthMode } from '../runtimeConfig';
 import type { DeviceClient } from '../types';
 import type { DemoAccountGroups } from '../demoAccounts';
 
 function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof AuthError && error.code === 'NO_BUYER_ACCESS') {
+    return `NO_BUYER_ACCESS — ${error.message}`;
+  }
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
@@ -119,12 +122,12 @@ export default function Login() {
           ) : (
             <>
               <h2 className="login__title">Вход в кабинет</h2>
-              <p className="login__sub">{isPocketBaseAuthMode() ? 'Введите код КИС и пароль учётной записи PocketBase.' : 'Введите код покупателя или код точки и пароль, которые вам выдал менеджер.'}</p>
+              <p className="login__sub">{isPocketBaseAuthMode() ? 'Введите логин пользователя и пароль. После входа вы сможете выбрать доступное юрлицо.' : 'Введите код покупателя или код точки и пароль, которые вам выдал менеджер.'}</p>
               <div id="loginErr">{error && <div className="login__error">{error}</div>}</div>
               <div className="login__field">
-                <label htmlFor="loginCode">Код покупателя или точки</label>
+                <label htmlFor="loginCode">{isPocketBaseAuthMode() ? 'Логин пользователя' : 'Код покупателя или точки'}</label>
                 <input
-                  id="loginCode" type="text" placeholder="Например, A016 или M-1467-01" autoComplete="username"
+                  id="loginCode" type="text" placeholder={isPocketBaseAuthMode() ? 'Например, ivan.petrov' : 'Например, A016 или M-1467-01'} autoComplete="username"
                   required value={code} onChange={(e) => setCode(e.target.value)}
                 />
               </div>

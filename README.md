@@ -1,10 +1,10 @@
-# КАРАВАЙ — личный кабинет 3.5 TypeScript + PocketBase directory
+# КАРАВАЙ — личный кабинет 3.6 TypeScript + multi-buyer access
 
-Основная версия личного кабинета покупателя на **React 18 + TypeScript + Vite 8**. Версия 3.5 добавляет безопасный промежуточный режим: учётная запись покупателя и связанные получатели загружаются напрямую из PocketBase, а бизнес-разделы честно остаются недоступными до серверного подключения КИС.
+Основная версия личного кабинета покупателя на **React 18 + TypeScript + Vite 8**. В версии 3.6 авторизуется пользователь из `users`, который через `user_buyers` может работать с одним или несколькими покупателями и их получателями. Бизнес-разделы честно остаются недоступными до серверного подключения КИС.
 
-Контур **этапа 2.1** с PocketBase auth сохранён. Новый срез **2.2** больше не требует совпадения `kis_code` с зашитыми demo-профилями и предназначен для создания первых тестовых `buyers/outlets` в админке PocketBase.
+Прямой вход через auth-коллекции `buyers` и `outlets`, использовавшийся в 3.5, удалён из HTML 3.6. Эти коллекции остаются только бизнес-справочниками.
 
-## Что входит в 3.5
+## Что входит в 3.6
 
 - шесть рабочих разделов: обзор, оформление заказа, история, точки, документы и профиль;
 - иерархия покупатель → получатели/торговые точки;
@@ -17,14 +17,19 @@
 - защита загрузок от устаревших ответов;
 - понятная ошибка первоначальной загрузки с повторной попыткой;
 - сборка с базовым адресом `/react-test/`;
-- unit-, интеграционные и браузерные сценарии версии 3.2.
+- unit-, интеграционные и браузерные сценарии версии 3.6;
 - строгий `tsconfig` (`strict: true`) без `any`, `@ts-ignore` и отключения проверки файлов;
 - единые типы для ролей, состояния, покупателей, точек, товаров, заказов, документов и ответов КИС;
 - обязательный `typecheck` перед тестами и production-сборкой;
-- блокировка входа при `must_change_password=true` до реализации отдельного сценария смены пароля.
-- профиль покупателя из `buyers` и список его активных получателей из `outlets`;
-- роль получателя видит только собственную точку и связанного покупателя;
-- постраничная загрузка получателей с запасом для ~600 точек;
+- вход только через `POST /api/collections/users/auth-with-password`;
+- блокировка входа при `active=false` или `must_change_password=true`;
+- повторная проверка `users` и `user_buyers` при восстановлении после F5;
+- автоматический выбор единственного покупателя и отдельный экран при нескольких;
+- переключатель текущего юрлица с подтверждением потери несохранённых данных;
+- полная очистка buyer-зависимого состояния и защита от устаревших ответов при переключении;
+- профиль покупателя и список его активных получателей из PocketBase;
+- роли доступа `owner`, `manager`, `viewer` и строгие типы каталога пользователя;
+- постраничная загрузка связей и получателей с запасом для ~600 точек;
 - отдельный режим `directory`, который не подмешивает mock-заказы, цены или документы;
 - один HTML для размещения как `/opt/pocketbase/pb_public/index.html`.
 
@@ -45,8 +50,8 @@ npm run check       # typecheck + unit + React integration + production build
 npm run test:e2e    # Playwright, Chromium должен быть установлен
 npm run preview     # проверка dist/ на /react-test/
 npm run build:demo  # обычная demo-сборка в dist-demo/
-npm run build:pocketbase-test # PocketBase auth + временные mock-данные, base /
-npm run build:pocketbase-directory # PocketBase auth + реальные buyers/outlets, base /
+npm run build:pocketbase-test # совместимый alias: users + user_buyers directory, base /
+npm run build:pocketbase-directory # users + реальные user_buyers/buyers/outlets, base /
 npm run build:standalone # один автономный HTML в artifacts/
 npm run build:standalone:pocketbase # один HTML для pb_public в artifacts/
 ```
@@ -60,7 +65,7 @@ npm run build:standalone:pocketbase # один HTML для pb_public в artifact
 - `src/orderRules.ts` — единые правила количества и проверка заказа;
 - `src/requestGate.ts` — отсечение устаревших ответов;
 - `src/authApi.ts` — вход, refresh и безопасное хранение сессии PocketBase;
-- `src/pocketBaseDirectoryApi.ts` — безопасная загрузка покупателя и его получателей;
+- `src/pocketBaseDirectoryApi.ts` — загрузка `user_buyers`, разрешённых покупателей и их получателей;
 - `src/runtimeConfig.ts` — проверяемая конфигурация режимов;
 - `src/mockApi.ts` — типизированный демонстрационный контракт КИС;
 - `src/components/` — экраны и диалоги;
@@ -85,6 +90,6 @@ npm run build:standalone:pocketbase # один HTML для pb_public в artifact
 
 ## Текущее состояние этапа 2
 
-Авторизация и каталог учётных записей PocketBase готовы к проверке. В режиме 2.2 реальные `buyers/outlets` читаются из PocketBase с учётом API rules. Matrix, orders и documents ещё не подключены: для этого нужен серверный API-шлюз КИС. Обычная production-сборка остаётся fail-closed и не включает mock.
+Авторизация пользователя и каталог доступа PocketBase готовы к проверке. Реальные `user_buyers`, `buyers` и `outlets` читаются с учётом API rules. Matrix, orders и documents ещё не подключены: для этого нужен серверный API-шлюз КИС. Production и directory-сборки остаются fail-closed и не включают mock fallback.
 
-Пошаговая настройка: [docs/POCKETBASE_DIRECTORY_SETUP.md](docs/POCKETBASE_DIRECTORY_SETUP.md). Контракт авторизации: [docs/AUTH_CONTRACT.md](docs/AUTH_CONTRACT.md). Полный контекст и дорожная карта: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).
+Пошаговая настройка: [docs/POCKETBASE_USER_ACCESS_SETUP.md](docs/POCKETBASE_USER_ACCESS_SETUP.md). Контракт авторизации: [docs/AUTH_CONTRACT.md](docs/AUTH_CONTRACT.md). Результаты проверок: [docs/TEST_REPORT_V3.6.md](docs/TEST_REPORT_V3.6.md). Полный контекст и дорожная карта: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).

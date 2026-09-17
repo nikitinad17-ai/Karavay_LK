@@ -6,6 +6,8 @@ export interface RuntimeConfig {
   readonly dataMode: DataMode;
   readonly pocketBaseUrl: string;
   readonly authTimeoutMs: number;
+  readonly usersCollection: string;
+  readonly userBuyersCollection: string;
   readonly buyersCollection: string;
   readonly outletsCollection: string;
 }
@@ -15,6 +17,8 @@ type RuntimeEnv = Partial<Record<
   | 'VITE_DATA_MODE'
   | 'VITE_POCKETBASE_URL'
   | 'VITE_AUTH_TIMEOUT_MS'
+  | 'VITE_POCKETBASE_USERS_COLLECTION'
+  | 'VITE_POCKETBASE_USER_BUYERS_COLLECTION'
   | 'VITE_POCKETBASE_BUYERS_COLLECTION'
   | 'VITE_POCKETBASE_OUTLETS_COLLECTION',
   string
@@ -37,15 +41,21 @@ export function resolveRuntimeConfig(env: RuntimeEnv = {}): RuntimeConfig {
   }
   if (!Number.isFinite(authTimeoutMs) || authTimeoutMs < 1000) throw new Error('VITE_AUTH_TIMEOUT_MS должен быть числом не меньше 1000');
 
+  const usersCollection = String(env.VITE_POCKETBASE_USERS_COLLECTION || 'users').trim();
+  const userBuyersCollection = String(env.VITE_POCKETBASE_USER_BUYERS_COLLECTION || 'user_buyers').trim();
   const buyersCollection = String(env.VITE_POCKETBASE_BUYERS_COLLECTION || 'buyers').trim();
   const outletsCollection = String(env.VITE_POCKETBASE_OUTLETS_COLLECTION || 'outlets').trim();
-  if (!buyersCollection || !outletsCollection) throw new Error('Имена auth-коллекций PocketBase не могут быть пустыми');
+  if (!usersCollection || !userBuyersCollection || !buyersCollection || !outletsCollection) {
+    throw new Error('Имена коллекций PocketBase не могут быть пустыми');
+  }
 
   return Object.freeze({
     authMode,
     dataMode,
     pocketBaseUrl,
     authTimeoutMs,
+    usersCollection,
+    userBuyersCollection,
     buyersCollection,
     outletsCollection,
   });
