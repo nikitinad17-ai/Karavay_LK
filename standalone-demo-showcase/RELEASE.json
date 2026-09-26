@@ -1,0 +1,21 @@
+{
+  "name": "Karavay-LK-v3.6.4-Demo-Showcase.html",
+  "version": "3.6.4",
+  "date": "2026-09-26",
+  "base": {
+    "name": "Karavay-LK-v3.6.3-Rights-List-Fields-Fix.html",
+    "sha256": "1c2f5683864f6d1c2def517ddffa47879b186f6e818ebb8da2a5dae0169e2311"
+  },
+  "artifact": {
+    "sha256": "be57f7b33ec167f701eb6e732492addb8b6b3070ad72e32d728774f88ea87ce9",
+    "bytes": 439120
+  },
+  "demo": {
+    "products": 111,
+    "seededOrders": 24,
+    "payers": 2,
+    "clients": 4,
+    "kisAccess": false
+  },
+  "verification": "npm run verify:showcase"
+}

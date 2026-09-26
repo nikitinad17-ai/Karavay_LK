@@ -93,3 +93,11 @@ npm run build:standalone:pocketbase # один HTML для pb_public в artifact
 Авторизация пользователя и каталог доступа PocketBase готовы к проверке. Реальные `user_buyers`, `buyers` и `outlets` читаются с учётом API rules. Matrix, orders и documents ещё не подключены: для этого нужен серверный API-шлюз КИС. Production и directory-сборки остаются fail-closed и не включают mock fallback.
 
 Пошаговая настройка: [docs/POCKETBASE_USER_ACCESS_SETUP.md](docs/POCKETBASE_USER_ACCESS_SETUP.md). Контракт авторизации: [docs/AUTH_CONTRACT.md](docs/AUTH_CONTRACT.md). Результаты проверок: [docs/TEST_REPORT_V3.6.md](docs/TEST_REPORT_V3.6.md). Полный контекст и дорожная карта: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).
+
+## Demo Showcase 3.6.4
+
+Полная демонстрационная версия с реальной авторизацией и правами PocketBase, локальными ассортиментом, ценами, заказами и документами находится в [`standalone-demo-showcase/`](standalone-demo-showcase/). Она не обращается к КИС и не заменяет рабочую версию 3.6.3.
+
+```bash
+npm run verify:showcase
+```
