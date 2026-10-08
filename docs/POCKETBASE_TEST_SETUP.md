@@ -1,5 +1,9 @@
 # Проверка React + PocketBase на VM
 
+> Текущий контур на 2026-10-08 описан в
+> [POCKETBASE_ACCESS_MODEL.md](POCKETBASE_ACCESS_MODEL.md).
+> Ниже сохранены проверки старой версии; не применять их к новой схеме без адаптации.
+
 > Эта инструкция относится к промежуточной версии 2.1 с фиксированными demo-профилями.
 > Для React 3.5 и реальных записей `buyers/outlets` используйте
 > [POCKETBASE_DIRECTORY_SETUP.md](POCKETBASE_DIRECTORY_SETUP.md).

@@ -1,5 +1,25 @@
 # КАРАВАЙ — личный кабинет 3.5 TypeScript + PocketBase directory
 
+## Актуальный контекст — 8 октября 2026
+
+Исходники React в `main` остаются версией 3.5. Рабочая модель PocketBase/standalone
+уже использует **users, roles, rights, payers, clients** и вход по email;
+standalone 3.6.3 сохранён в ветке `feature/v3.6.4-demo-showcase`.
+
+Для следующего этапа принято: **браузер → HTTPS `/service/*` + PB-токен →
+PocketBase на VM `192.168.25.98` → внутренний Web API КИС
+`http://serv15db:55580/api/v1`**. Роль шлюза выполняют `pb_hooks`; отдельный
+секретный ключ КИС не используем. Реальные handlers и успешный каталог КИС
+ещё не подтверждены. Выбор и настройка внешнего HTTPS-контура предстоят.
+
+- [Актуальные коллекции, права и сессия](docs/POCKETBASE_ACCESS_MODEL.md).
+- [Сетевая схема, протоколы и маршруты /service/*](docs/POCKETBASE_KIS_GATEWAY.md).
+- [Контрольная точка для нового чата](docs-project/CHAT_HANDOFF_2026-10-08.md).
+
+Далее описана реализация **3.5 в main**. Её `buyers/outlets` и прежний контракт
+нельзя автоматически переносить на актуальную VM. Demo Showcase 3.6.4 содержит
+локальные бизнес-данные и не подтверждает работу КИС.
+
 Основная версия личного кабинета покупателя на **React 18 + TypeScript + Vite 8**. Версия 3.5 добавляет безопасный промежуточный режим: учётная запись покупателя и связанные получатели загружаются напрямую из PocketBase, а бизнес-разделы честно остаются недоступными до серверного подключения КИС.
 
 Контур **этапа 2.1** с PocketBase auth сохранён. Новый срез **2.2** больше не требует совпадения `kis_code` с зашитыми demo-профилями и предназначен для создания первых тестовых `buyers/outlets` в админке PocketBase.
@@ -87,4 +107,6 @@ npm run build:standalone:pocketbase # один HTML для pb_public в artifact
 
 Авторизация и каталог учётных записей PocketBase готовы к проверке. В режиме 2.2 реальные `buyers/outlets` читаются из PocketBase с учётом API rules. Matrix, orders и documents ещё не подключены: для этого нужен серверный API-шлюз КИС. Обычная production-сборка остаётся fail-closed и не включает mock.
 
-Пошаговая настройка: [docs/POCKETBASE_DIRECTORY_SETUP.md](docs/POCKETBASE_DIRECTORY_SETUP.md). Контракт авторизации: [docs/AUTH_CONTRACT.md](docs/AUTH_CONTRACT.md). Полный контекст и дорожная карта: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).
+Пошаговая настройка исторической 3.5: [docs/POCKETBASE_DIRECTORY_SETUP.md](docs/POCKETBASE_DIRECTORY_SETUP.md).
+Контракт авторизации 3.5: [docs/AUTH_CONTRACT.md](docs/AUTH_CONTRACT.md).
+Актуальный статус и дорожная карта: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).
