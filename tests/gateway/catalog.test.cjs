@@ -1,0 +1,47 @@
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const g = require('../../pb_hooks/lib/catalog.cjs');
+const ids = {user:'uuuuuuuuuuuuuuu',role:'rrrrrrrrrrrrrrr',payer:'ppppppppppppppp',client:'ccccccccccccccc',other:'ooooooooooooooo'};
+function fixture() {
+  const records = {users:{[ids.user]:{active:true,must_change_password:false,role:ids.role}},roles:{[ids.role]:{active:true,code_role:'viewer'}},payers:{[ids.payer]:{active:true,id_pay:10}},clients:{[ids.client]:{active:true,payer:ids.payer,id_clt:20}}};
+  const rights = [{user:ids.user,payer:ids.payer,client:ids.client,active:true}];
+  const repo = {get:(c,id)=>records[c][id],hasRight:(u,p,c)=>rights.some(r=>r.user===u&&r.payer===p&&r.active===true&&(r.client===''||r.client===c))};
+  const auth = {id:ids.user,collection:'users'};
+  const q = {client:[ids.client],DateOrd:['1791493200'],Group:['0']};
+  const body = {id_clt:20,DateOrd:1791493200,Group:0,Product:[{id_prd:1,KodProd:'01',NameProd:'Хлеб',KolUkl:12,CenaOTP:25,Group:0,secret:'hidden'}],secret:'hidden'};
+  let calls=0;
+  const run = () => { calls++; return JSON.stringify(body)+'\n200'; };
+  return {records,rights,repo,auth,q,body,run,calls:()=>calls};
+}
+function denied(f,status=403) { assert.throws(()=>g.catalog(f.repo,f.auth,f.q,f.run),e=>e.status===status); assert.equal(f.calls(),0); }
+test('allowed exact right; only allowlisted fields; no KIS identifiers in result',()=>{const f=fixture();const r=g.catalog(f.repo,f.auth,f.q,f.run);assert.equal(f.calls(),1);assert.equal(r.Product.length,1);assert.equal(r.Product[0].secret,undefined);assert.equal(r.secret,undefined);assert.equal(r.id_clt,undefined);});
+test('general right covers own active client',()=>{const f=fixture();f.rights[0].client='';assert.equal(g.catalog(f.repo,f.auth,f.q,f.run).client,ids.client);});
+for(const collection of ['buyers','clients','_superusers']) test('reject auth '+collection,()=>{const f=fixture();f.auth.collection=collection;denied(f,401);});
+test('missing auth',()=>{const f=fixture();f.auth=null;denied(f,401);});
+for(const c of ['users','roles','payers','clients']) test('inactive '+c+' after token issued',()=>{const f=fixture();Object.values(f.records[c])[0].active=false;denied(f);});
+for(const c of ['users','roles','payers','clients']) test('missing '+c,()=>{const f=fixture();f.records[c]={};denied(f);});
+for(const role of ['', 'admin']) test('unknown role '+role,()=>{const f=fixture();f.records.roles[ids.role].code_role=role;denied(f);});
+test('forced password change',()=>{const f=fixture();f.records.users[ids.user].must_change_password=true;denied(f);});
+test('revoked right',()=>{const f=fixture();f.rights[0].active=false;denied(f);});
+test('deleted right',()=>{const f=fixture();f.rights.length=0;denied(f);});
+test('foreign user right',()=>{const f=fixture();f.rights[0].user=ids.other;denied(f);});
+test('foreign payer right',()=>{const f=fixture();f.rights[0].payer=ids.other;denied(f);});
+test('other client of same payer forbidden',()=>{const f=fixture();f.rights[0].client=ids.other;denied(f);});
+test('general right cannot cross payer',()=>{const f=fixture();f.rights[0].client='';f.rights[0].payer=ids.other;denied(f);});
+test('client moved to foreign payer',()=>{const f=fixture();f.records.clients[ids.client].payer=ids.other;f.records.payers[ids.other]={active:true,id_pay:30};denied(f);});
+test('spoofed payer query',()=>{const f=fixture();f.q.payer=[ids.other];denied(f);});
+test('existence query handles grant after 600 irrelevant rights',()=>{const f=fixture();f.rights.unshift(...Array.from({length:600},()=>({user:ids.other})));assert.equal(g.catalog(f.repo,f.auth,f.q,f.run).Product.length,1);});
+test('DB failure fails closed',()=>{const f=fixture();f.repo.hasRight=()=>{throw Error('private database failure');};denied(f);});
+for(const mutate of [f=>f.q.client=['20'],f=>f.q.client=[ids.client,ids.other],f=>f.q.url=['http://evil'],f=>f.q.Group=['2'],f=>delete f.q.DateOrd,f=>f.q.DateOrd=['1791493200000'],f=>f.q.DateOrd=['1&url=evil']]) test('invalid query '+mutate.toString(),()=>{const f=fixture();mutate(f);denied(f,400);});
+for(const c of ['users','roles','payers','clients']) test('revocation during upstream '+c,()=>{const f=fixture();const run=()=>{Object.values(f.records[c])[0].active=false;return f.run();};assert.throws(()=>g.catalog(f.repo,f.auth,f.q,run),e=>e.status===403);});
+test('right revoked during upstream',()=>{const f=fixture();assert.throws(()=>g.catalog(f.repo,f.auth,f.q,()=>{f.rights[0].active=false;return f.run();}),e=>e.status===403);});
+for(const status of [301,302,401,403,404,500,504,204]) test('upstream '+status+' becomes safe 502',()=>{const f=fixture();assert.throws(()=>g.catalog(f.repo,f.auth,f.q,()=> 'secret\n'+status),e=>e.status===502&&!e.message.includes('secret'));});
+for(const [message,status] of [['exit status 28',504],['exit status 7',502],['curl not found',502],['exit status 63',502]]) test('transport '+message,()=>{const f=fixture();assert.throws(()=>g.catalog(f.repo,f.auth,f.q,()=>{throw Error(message);}),e=>e.status===status);});
+for(const mutate of [m=>m.id_clt=99,m=>m.DateOrd++,m=>m.Group=1,m=>m.Id_pay=99,m=>delete m.Product,m=>m.Product={},m=>m.Product[0].CenaOTP=-1,m=>m.Product[0].CenaOTP='25',m=>m.Product[0].Group=1,m=>m.Product[0].id_clt=99,m=>m.Product.push(m.Product[0]),m=>m.Product[0].NameProd='http://serv15db:55580',m=>m.Product[0].KolUkl=0]) test('reject invalid matrix '+mutate.toString(),()=>{const f=fixture();mutate(f.body);assert.throws(()=>g.catalog(f.repo,f.auth,f.q,f.run),e=>e.status===502);});
+test('invalid JSON decimals are rejected without silent repair',()=>{const f=fixture();assert.throws(()=>g.catalog(f.repo,f.auth,f.q,()=>'{"CenaOTP":.00}\n200'),e=>e.status===502);});
+test('oversized body',()=>{const f=fixture();assert.throws(()=>g.catalog(f.repo,f.auth,f.q,()=> 'x'.repeat(2097161)),e=>e.status===502);});
+test('empty verified matrix is allowed',()=>{const f=fixture();f.body.Product=[];assert.deepEqual(g.catalog(f.repo,f.auth,f.q,f.run).Product,[]);});
+test('fixed transport: no token, proxy, redirect follow or shell',()=>{const f=fixture();const args=g.curlArgs({kisClient:20},g.query(f.q));assert.equal(args[0],'--disable');assert.ok(!args.includes('-L'));assert.ok(args.includes('--max-filesize'));assert.ok(args.includes('--noproxy'));assert.equal(args.at(-1),'http://serv15db:55580/api/v1/clients/20/matrix?DateOrd=1791493200&Group=0');assert.ok(!args.join(' ').includes('Authorization'));});
+test('raw query percent decoding preserves exact parameters',()=>{assert.equal(g.query(g.parseRawQuery('client=ccccccccccccccc&DateOrd=1791493200&Group=%30')).group,0);});
+test('encoded duplicate parameter rejected',()=>{assert.throws(()=>g.query(g.parseRawQuery('client=ccccccccccccccc&%63lient=ooooooooooooooo&DateOrd=1&Group=0')),e=>e.status===400);});
+for(const raw of ['client=%XX','client','x'.repeat(2049),'__proto__=evil']) test('reject malformed raw query '+raw.slice(0,20),()=>{assert.throws(()=>g.query(g.parseRawQuery(raw)),e=>e.status===400);});

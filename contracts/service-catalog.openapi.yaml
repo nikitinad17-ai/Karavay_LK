@@ -1,0 +1,77 @@
+openapi: 3.1.0
+info:
+  title: КАРАВАЙ — PocketBase catalog gateway
+  version: 0.1.0
+  description: Только чтение. Реальный контракт КИС требует проверки на тестовой VM.
+servers:
+  - url: /service
+security:
+  - pocketBaseUsersToken: []
+paths:
+  /catalog:
+    get:
+      operationId: getServiceCatalog
+      parameters:
+        - name: client
+          in: query
+          required: true
+          schema: {type: string, pattern: '^[a-z0-9]{15}$'}
+          description: ID записи clients PocketBase, не ID КИС.
+        - name: payer
+          in: query
+          schema: {type: string, pattern: '^[a-z0-9]{15}$'}
+          description: Необязательный ID payers PB; должен совпасть с client.payer.
+        - name: DateOrd
+          in: query
+          required: true
+          schema: {type: integer, minimum: 1, maximum: 4102444800}
+          description: Unix timestamp в секундах; семантика даты требует проверки КИС.
+        - name: Group
+          in: query
+          required: true
+          schema: {type: integer, enum: [0, 1]}
+      responses:
+        '200':
+          description: Отфильтрованная матрица; Cache-Control no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [client, payer, DateOrd, Group, Product]
+                properties:
+                  client: {type: string}
+                  payer: {type: string}
+                  DateOrd: {type: integer}
+                  Group: {type: integer, enum: [0, 1]}
+                  Product:
+                    type: array
+                    maxItems: 10000
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id_prd, KodProd, NameProd, KolUkl, CenaOTP, Group]
+                      properties:
+                        id_prd: {type: integer, minimum: 1}
+                        KodProd: {type: string, minLength: 1, maxLength: 100}
+                        NameProd: {type: string, minLength: 1, maxLength: 500}
+                        KolUkl: {type: integer, minimum: 1}
+                        CenaOTP: {type: number, minimum: 0}
+                        Group: {type: integer, enum: [0, 1]}
+                        BaseCenaOTP: {type: number, minimum: 0}
+                        Vesprod: {type: number, minimum: 0}
+                        ProcSkd: {type: number, minimum: 0, maximum: 100}
+                        KolshtOrdmin: {type: [integer, 'null'], minimum: 1}
+                        MarketingGroup: {type: string, minLength: 1, maxLength: 200}
+                        Srok: {type: string, minLength: 1, maxLength: 200}
+        '400': {description: Некорректные, неизвестные или повторные параметры.}
+        '401': {description: Нет действительной авторизации users (PB middleware).}
+        '403': {description: Нет доступа или неактивное звено.}
+        '502': {description: Отказ КИС включая 401/403, неверный контекст/JSON, слишком большое тело или недоступный transport.}
+        '504': {description: Таймаут исходящего запроса.}
+components:
+  securitySchemes:
+    pocketBaseUsersToken:
+      type: http
+      scheme: bearer
+      bearerFormat: PocketBase users JWT

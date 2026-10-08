@@ -1,0 +1,19 @@
+onBootstrap(e => {
+  e.next();
+  e.app.delete(e.app.findCollectionByNameOrId("users"));
+  const defs = [
+    {name:'roles',fields:[{name:'active',type:'bool'},{name:'code_role',type:'text'}]},
+    {name:'payers',fields:[{name:'active',type:'bool'},{name:'id_pay',type:'number'}]},
+    {name:'clients',fields:[{name:'active',type:'bool'},{name:'payer',type:'relation',collectionId:'payers',maxSelect:1},{name:'id_clt',type:'number'}]},
+    {name:'users',type:'auth',passwordAuth:{enabled:true,identityFields:['email']},fields:[{name:'active',type:'bool'},{name:'must_change_password',type:'bool'},{name:'role',type:'relation',collectionId:'roles',maxSelect:1}]},
+    {name:'rights',fields:[{name:'active',type:'bool'},{name:'user',type:'relation',collectionId:'users',maxSelect:1},{name:'payer',type:'relation',collectionId:'payers',maxSelect:1},{name:'client',type:'relation',collectionId:'clients',maxSelect:1}]}
+  ];
+  for (const d of defs) {
+    for (const f of d.fields) if(f.collectionId) f.collectionId=e.app.findCollectionByNameOrId(f.collectionId).id;
+    e.app.save(new Collection(d));
+  }
+  const data=[['roles','rrrrrrrrrrrrrrr',{active:true,code_role:'viewer'}],['payers','ppppppppppppppp',{active:true,id_pay:10}],['clients','ccccccccccccccc',{active:true,payer:'ppppppppppppppp',id_clt:20}],['users','uuuuuuuuuuuuuuu',{active:true,must_change_password:false,role:'rrrrrrrrrrrrrrr',email:'fixture@example.test',password:'fixture-password-ONLY',passwordConfirm:'fixture-password-ONLY'}],['rights','xxxxxxxxxxxxxxx',{active:true,user:'uuuuuuuuuuuuuuu',payer:'ppppppppppppppp',client:'ccccccccccccccc'}]];
+  for(const [c,id,fields] of data) {const r=new Record(e.app.findCollectionByNameOrId(c));r.set('id',id);for(const k of Object.keys(fields))r.set(k,fields[k]);e.app.save(r);}
+});
+// Test-only mutation route restricted to loopback in this disposable process.
+routerAdd('POST','/fixture/{collection}/{field}/{value}',e=>{const ids={rights:'xxxxxxxxxxxxxxx',users:'uuuuuuuuuuuuuuu',roles:'rrrrrrrrrrrrrrr',payers:'ppppppppppppppp',clients:'ccccccccccccccc'};const c=e.request.pathValue('collection'),f=e.request.pathValue('field'),v=e.request.pathValue('value');const r=e.app.findRecordById(c,ids[c]);r.set(f,v==='true'?true:v==='false'?false:v);e.app.save(r);return e.json(200,{});});
