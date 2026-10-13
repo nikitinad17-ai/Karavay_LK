@@ -1,0 +1,26 @@
+// jsdom integration with actual requests to the isolated PB fixture.
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{JSDOM}=require('jsdom');
+const settings=JSON.parse(fs.readFileSync(0,'utf8'));
+(async()=>{
+ const root=path.join(__dirname,'../pb_public/manager');
+ const dom=new JSDOM(fs.readFileSync(path.join(root,'index.html'),'utf8'),{url:settings.url+'/manager/',runScripts:'outside-only'}),w=dom.window;
+ w.fetch=(url,options)=>fetch(new URL(url,settings.url),options);w.AbortController=AbortController;w.confirm=()=>true;
+ w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
+ w.eval(fs.readFileSync(path.join(root,'app.js'),'utf8'));
+ const wait=async fn=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw Error('UI condition timed out; message='+w.document.querySelector('#message').textContent+'; form='+w.document.querySelector('#form-error').textContent+'; title='+w.document.querySelector('#title').textContent);};
+ const q=s=>w.document.querySelector(s);let count=0;
+ q('#login-form [name=identity]').value=settings.email;q('#login-form [name=password]').value=settings.password;
+ q('#login-form').dispatchEvent(new w.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:q('#login-form button')}));
+ await wait(()=>!q('#workspace').hidden);assert(q('#content').textContent.includes('Test buyer 1'));count++;
+ assert.equal(q('#login-form [name=password]').value,'');count++;
+ q('[data-tab=clients]').click();q('#buyer').value=[...q('#buyer').options].find(o=>o.textContent.includes('Test buyer 1')).value;q('#buyer').dispatchEvent(new w.Event('change',{bubbles:true}));await wait(()=>q('[data-attach="11"]'));assert(q('#content').textContent.includes('Test recipient 11'));count++;
+ q('[data-tab=users]').click();assert(q('#content').textContent.includes('Updated customer'));count++;
+ q('#create').click();assert(q('#dialog').open);q('[name=name]').value='UI customer';q('[name=email]').value='uicustomer@example.test';q('[name=login]').value='uicustomer';q('#editor [name=password]').value=settings.password;
+ q('.rp').value=q('.rp option:not([value=""])').value;
+ q('#editor').dispatchEvent(new w.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:q('#save')}));
+ await wait(()=>!q('#dialog').open);await wait(()=>q('#content').textContent.includes('UI customer'));count++;
+ assert(!q('#workspace').textContent.includes('Заказы'));count++;
+ q('#create').click();q('.rp').value=q('.rp option:not([value=""])').value;let prompted=false;w.confirm=()=>{prompted=true;return false;};q('#close').click();assert(prompted&&q('#dialog').open);count++;w.confirm=()=>true;q('#close').click();
+ q('#logout').click();assert.equal(w.sessionStorage.getItem('karavay.manager.token'),null);assert(q('#workspace').hidden);count++;
+ console.log('PASS:',count,'UI integration checks (jsdom and real local PB HTTP).');dom.window.close();
+})().catch(e=>{console.error(e.message);process.exit(1);});
