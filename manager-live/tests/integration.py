@@ -56,6 +56,17 @@ print(json.dumps({'success':data is not None,'data':data}),end='\\n__KIS_HTTP__:
   rid=right(mid,p1);right(other,p2);right(owner,p1)
   def auth(login,pw=password):return request('/api/collections/users/auth-with-password',{'identity':login+'@example.test','password':pw})['token']
   token=auth('manager');vt=auth('viewer');ot=auth('buyerowner');checks=0
+  # Exercise the actual grant script against this isolated PocketBase.
+  import importlib.util
+  spec=importlib.util.spec_from_file_location('manager_grant',ROOT/'scripts/Grant-Manager-Access.py');grantmod=importlib.util.module_from_spec(spec);spec.loader.exec_module(grantmod);grantmod.BASE=base
+  grantapi=grantmod.Api();grantapi.token=admin
+  grantuser=user('manager_test');granted=grantmod.grant(grantapi,'manager_test','P1');checks+=1
+  assert grantmod.grant(grantapi,'manager_test','P1')==granted;checks+=1
+  req=urllib.request.Request(base+'/api/collections/rights/records/'+granted,data=json.dumps({'active':False}).encode(),headers={'Authorization':admin,'Content-Type':'application/json'},method='PATCH');urllib.request.urlopen(req).close()
+  assert grantmod.grant(grantapi,'manager_test','P1')==granted;checks+=1
+  for login,code in [('viewer','P1'),('missing','P1'),('manager_test','missing')]:
+   try:grantmod.grant(grantapi,login,code);raise AssertionError('grant unexpectedly succeeded')
+   except grantmod.Failure:checks+=1
   def check(path,body=None,t=token,expect=200):
    global checks
    data=request(path,body,t,expect);checks+=1;return data
