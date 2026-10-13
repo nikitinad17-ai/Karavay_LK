@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#043F88">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="Приватное демо администрирования КАРАВАЙ: пользователи, покупатели, выбор получателей из КИС, доступы и восстановление.">
+  <title>КАРАВАЙ · Кабинет менеджера</title>
+  <link rel="icon" type="image/svg+xml" href="logo-official.svg">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="model.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Перейти к содержимому</a>
+  <div class="shell">
+    <aside id="sidebar" class="sidebar" aria-label="Главное меню">
+      <div class="brand"><img src="logo-official.svg" alt="Логотип КАРАВАЙ" width="47" height="47"><div><b>КАРАВАЙ</b><span>Кабинет менеджера</span></div></div>
+      <div class="workspace-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+      <nav id="navigation" aria-label="Разделы"></nav>
+      <div class="sidebar-bottom">
+        <div class="scope-note"><span class="live-dot"></span> Только мои клиенты<span>Ваши покупатели и получатели</span></div>
+        <div class="demo-card"><span class="mini-label">ДЕМОНСТРАЦИЯ</span><p>Попробуйте действия менеджера на тестовых данных.</p><button class="text-btn light" data-action="restart">Начать заново <span aria-hidden="true">↻</span></button></div>
+        <a class="standalone-download" href="Karavay-Manager-Demo-v0.3.html" download>Скачать автономный HTML ↓</a>
+        <div class="sidebar-version">Менеджер · демо администрирования 0.3</div>
+      </div>
+    </aside>
+    <div class="main-shell">
+      <header class="topbar">
+        <button id="menu" class="icon-btn menu-button" aria-label="Открыть меню" aria-expanded="false"></button>
+        <div class="breadcrumbs">Личный кабинет <span>/</span> <strong id="crumb">Покупатели</strong></div>
+        <div class="account"><div class="avatar">МС</div><div><b>Мария Соколова</b><span>Менеджер · демо</span></div></div>
+      </header>
+      <main id="main" tabindex="-1">
+        <div class="demo-banner"><span class="demo-badge">ДЕМО</span><span>Тестовые данные. Изменения сохраняются только в этом браузере.</span><button data-action="about" class="text-btn">О прототипе</button></div>
+        <section id="content" aria-label="Содержимое раздела"></section>
+        <footer class="page-footer"><span>КАРАВАЙ · Пространство менеджера</span><span>Санкт-Петербург / тестовый контур</span></footer>
+      </main>
+    </div>
+  </div>
+  <div id="menu-backdrop" class="menu-backdrop" hidden></div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>
+  <noscript><div class="noscript">Для интерактивного демо включите JavaScript в браузере.</div></noscript>
+</body>
+</html>
