@@ -13,12 +13,14 @@ $sourceNames = @(
     'karavay-catalog.pb.js',
     'karavay-orders.pb.js'
 )
-$sourcePaths = @($sourceNames | ForEach-Object { 'lindevadmin@192.168.25.98:/opt/pocketbase/pb_hooks/' + $_ })
 Write-Host 'Copying the installed gateway source. Enter your SSH password only in the terminal if prompted.'
-& scp @sourcePaths $folder
-if ($LASTEXITCODE -ne 0) { throw 'Source copy failed. No server changes were made.' }
+# Copy one exact remote filename per invocation for Windows scp compatibility.
 foreach ($name in $sourceNames) {
+    $source = 'lindevadmin@192.168.25.98:/opt/pocketbase/pb_hooks/' + $name
     $path = Join-Path $folder $name
+    Write-Host ('Copying ' + $name)
+    & scp $source $path
+    if ($LASTEXITCODE -ne 0) { throw ('Source copy failed: ' + $name + '. No server changes were made.') }
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw ('Missing source file: ' + $name) }
     if ((Get-Item -LiteralPath $path).Length -eq 0) { throw ('Empty source file: ' + $name) }
 }
