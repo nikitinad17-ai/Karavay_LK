@@ -80,6 +80,9 @@ print(raw,end='\\n__KIS_HTTP__:200')
   check('/service/manager/state',t=vt,expect=403)
   check('/service/manager/state',t=ot,expect=403)
   s=check('/service/manager/state');assert [x['id'] for x in s['payers']]==[p1]
+  check('/service/manager/directory',t='',expect=401)
+  check('/service/manager/directory',t=vt,expect=403)
+  directory=check('/service/manager/directory')['buyers'];assert [p['id'] for p in directory]==[1,2,3,4];assert directory[0]['connection']=='assigned' and directory[1]['connection']=='registered'
   check('/service/manager/buyers',t='',expect=401)
   check('/service/manager/buyers',t=vt,expect=403)
   assert [p['id'] for p in check('/service/manager/buyers')['buyers']]==[3,4]

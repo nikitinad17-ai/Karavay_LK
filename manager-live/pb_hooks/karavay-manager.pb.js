@@ -1,3 +1,4 @@
+routerAdd('GET','/service/manager/directory',e=>require(__hooks+'/karavay-manager.js').route(e,'directory'),$apis.requireAuth('users'));
 routerAdd('GET','/service/manager/buyers',e=>require(__hooks+'/karavay-manager.js').route(e,'buyers'),$apis.requireAuth('users'));
 /// <reference path="../pb_data/types.d.ts" />
 routerAdd('GET','/service/manager/state',e=>require(__hooks+'/karavay-manager.js').route(e,'state'),$apis.requireAuth('users'));

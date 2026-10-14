@@ -59,15 +59,15 @@ function normalizeKisNumbers(raw) {
   return raw.replace(/"(?:[^"\\]|\\[\s\S])*"|([:\[,]\s*)(-?)\.(\d+)/g,
     (whole,prefix,sign,digits)=>prefix===undefined?whole:prefix+sign+'0.'+digits);
 }
-function buyerCandidates(app,m) {
+function buyerCandidates(app,m,all=false) {
   const list=kis('/payers');
   if(!Array.isArray(list)||list.length>10000)fail(502,'INVALID_KIS_LIST');
   const registered=rows(app,'payers',''),ids=new Set(),codes=new Set(),result=[];
   for(const x of list) {
     if(!x||!id(x.id)||ids.has(x.id)||typeof x.kod!=='string'||!x.kod.trim()||codes.has(x.kod)||typeof x.name!=='string'||!x.name.trim())fail(502,'INVALID_KIS_LIST');
     ids.add(x.id);codes.add(x.kod);
-    if(!registered.some(p=>p.get('id_pay')===x.id||p.get('kod_pay')===x.kod))
-      result.push({id:x.id,code:x.kod,name:x.name,address:typeof x.adres==='string'?x.adres:''});
+    const local=registered.find(p=>p.get('id_pay')===x.id||p.get('kod_pay')===x.kod);
+    if(all||!local)result.push({id:x.id,code:x.kod,name:x.name,address:typeof x.adres==='string'?x.adres:'',...(all?{connection:!local?'available':m.map.has(local.id)?'assigned':'registered'}:{})});
   }
   return result;
 }
@@ -138,7 +138,7 @@ function state(app,uid) {
   const now=manager(app,uid);
   const signature=x=>JSON.stringify(Array.from(x.map,([pid,a])=>[pid,a.all,Array.from(a.ids).sort(),a.record.get('id_pay'),a.record.get('active')]).sort());
   if(signature(m)!==signature(now))fail(403,'ACCESS_CHANGED');
-  return {version:'0.6.0',manager:{name:m.user.get('name')},payers,users:Array.from(users.values())};
+  return {version:'0.6.1',manager:{name:m.user.get('name')},payers,users:Array.from(users.values())};
 }
 function mutate(e,b) {
   const uid=e.auth.id, app=e.app, m=manager(app,uid);
@@ -207,6 +207,11 @@ function route(e,kind) {
   try {
     if(!e.auth)fail(401,'AUTH_REQUIRED');
     if(kind==='state'){if(e.request.url.rawQuery)fail(400,'INVALID_PARAMETERS');return e.json(200,state(e.app,e.auth.id));}
+    if(kind==='directory') {
+      if(e.request.url.rawQuery)fail(400,'INVALID_PARAMETERS');
+      const m=manager(e.app,e.auth.id),list=buyerCandidates(e.app,m,true);manager(e.app,e.auth.id);
+      return e.json(200,{buyers:list});
+    }
     if(kind==='buyers') {
       if(e.request.url.rawQuery)fail(400,'INVALID_PARAMETERS');
       const m=manager(e.app,e.auth.id),list=buyerCandidates(e.app,m);manager(e.app,e.auth.id);

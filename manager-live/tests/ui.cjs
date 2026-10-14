@@ -11,7 +11,7 @@ const settings=JSON.parse(fs.readFileSync(0,'utf8'));
  const q=s=>w.document.querySelector(s);let count=0;
  q('#login-form [name=identity]').value=settings.email;q('#login-form [name=password]').value=settings.password;
  q('#login-form').dispatchEvent(new w.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:q('#login-form button')}));
- await wait(()=>!q('#workspace').hidden);assert(q('#content').textContent.includes('Test buyer 1'));count++;
+ await wait(()=>!q('#workspace').hidden);await wait(()=>q('#content').textContent.includes('Buyer 1'));assert(q('#content').textContent.includes('Buyer 2'));assert.equal(q('#content').querySelectorAll('.card').length,4);count++;
  assert.equal(q('#login-form [name=password]').value,'');count++;
  q('[data-tab=clients]').click();q('#buyer').value=[...q('#buyer').options].find(o=>o.textContent.includes('Test buyer 1')).value;q('#buyer').dispatchEvent(new w.Event('change',{bubbles:true}));await wait(()=>q('#content').textContent.includes('Test recipient 11'));assert(q('#content').textContent.includes('Test recipient 11'));count++;
  q('[data-tab=users]').click();assert(q('#content').textContent.includes('Updated customer'));count++;
