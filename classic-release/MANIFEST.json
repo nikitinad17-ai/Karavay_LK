@@ -1,10 +1,63 @@
 {
-  "version": "3.8-preparation",
-  "status": "awaiting-kis-order-contract",
-  "html_sha256": "1ef3bcdd06febd09d224db4ece737bc177cd4a97eb725d9b37d95947decb37dc",
-  "base_client": "3.7.3",
+  "version": "3.8.0",
+  "status": "ready-for-vm-verification",
+  "html_sha256": "899f81157a6204251fb2348af8b244ac8a465ecb3186a0aa08be951306f49f0b",
   "design": "3.6.4",
-  "create_order_enabled": false,
-  "order_lines_enabled": false,
-  "manager_modified": false
+  "create_order_enabled": true,
+  "order_lines_enabled": true,
+  "live_kis_post_verified": false,
+  "manager_modified": false,
+  "package": {
+    "pb_public/index.html": "899f81157a6204251fb2348af8b244ac8a465ecb3186a0aa08be951306f49f0b",
+    "pb_hooks/karavay-checkout.js": "dbf3abc45b85692d1dc5bfe5e9293198a737d996e7ec862dd6b20ba8681ea40b",
+    "pb_hooks/karavay-order-details.pb.js": "1525522db03cb5dee38e18e03fdd19210dbc833ff657e2270ed4340fe4009d88",
+    "pb_hooks/karavay-orders.pb.js": "7d600e8a8216f9ab5a84fffe790304ae1fbaadf1bf8324f9449392d7c69652d4",
+    "pb_migrations/1792000000_classic_order_requests.js": "e349f366687677ea447c1e34d647a747972d794a8b2949296bc85119761df168"
+  },
+  "gateway_preserved": {
+    "karavay-context.pb.js": "f72ef461d7b34d4e97f84c461b3d2ff9dd4f1c9402b2f7dfa1ea796270ff9d0f",
+    "karavay-catalog.pb.js": "cd2a21fbc2346611eb3d62883964cc150b4730965fc57f914fe76fdf397a7516",
+    "karavay-clients.pb.js": "c670f7eee3ab3cba316c83cca7a2d28ef438bfef601c5858f6cde9114abccdbc"
+  },
+  "previous": {
+    "pb_public/index.html": [
+      "02574f1c1d0a98684aa8550ff5b3dccf1a5d9867bcddca3a4672c91518c4c12e",
+      "54d6097346efb055507ae669697159a80cf13a73350c9cd50837a0571106ed2c"
+    ],
+    "pb_hooks/karavay-orders.pb.js": [
+      "85fde8d50f1a979ee0a3491d0df2d86d89f7307c3b3743b3f4ca46d37b346561"
+    ]
+  },
+  "required_fields": {
+    "users": {
+      "id": "text",
+      "email": "email",
+      "active": "bool",
+      "must_change_password": "bool",
+      "role": "relation",
+      "role_code": "select"
+    },
+    "roles": {
+      "code_role": "text",
+      "active": "bool"
+    },
+    "payers": {
+      "id_pay": "number",
+      "active": "bool"
+    },
+    "clients": {
+      "id_clt": "number",
+      "payer": "relation",
+      "active": "bool"
+    },
+    "rights": {
+      "user": "relation",
+      "payer": "relation",
+      "client": "relation",
+      "scope": "select",
+      "kis_client_id": "number",
+      "active": "bool"
+    }
+  },
+  "installer_sha256": "f878b433806689b47b0d1bfbba97550de54e014dc4715a677a0aa59b7f8e663c"
 }

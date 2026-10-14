@@ -17,5 +17,5 @@ def main():
     finally:
         if stage.exists():shutil.rmtree(stage)
     print('CLASSIC_PREVIEW_INSTALLED: http://192.168.25.98:8090/classic-preview/')
-    print('Основной кабинет, менеджер, gateway и база не изменены. Отправка и состав заказа ожидают контракт КИС.')
+    print('Установлен только HTML для просмотра. Для отправки и истории требуется backend пакета 3.8.0.')
 if __name__=='__main__':main()

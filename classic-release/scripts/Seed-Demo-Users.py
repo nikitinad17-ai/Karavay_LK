@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Create two explicitly requested (демо) users through PocketBase API.
-No schema changes, no KIS writes. Existing accounts and payer records are not modified.
+No schema changes or KIS writes. Missing PB buyer mappings are registered from fresh KIS data; existing records are not modified.
 Run on the VM in an SSH TTY. Credentials are entered locally and never printed.
 """
 import argparse,getpass,json,re,sys,urllib.request,urllib.error,urllib.parse
@@ -37,7 +37,17 @@ def prepare(api):
     role=only(api.rows('roles','active = true && code_role = "owner"'),'Активная роль owner')
     payers={};recipients={}
     for pid,cid in [(300182,300183),(299271,299300)]:
-        p=only(api.rows('payers','id_pay = '+str(pid)+' && active = true'),'Покупатель КИС '+str(pid)+' в PocketBase')
+        existing=api.rows('payers','id_pay = '+str(pid))
+        actual=api.call('/payers/'+str(pid),kis=True)
+        if actual.get('id')!=pid or actual.get('state')!=1 or not actual.get('kod') or not actual.get('name'):raise Failure('Покупатель не подтверждён КИС.')
+        if existing:
+            p=only(existing,'Покупатель КИС '+str(pid)+' в PocketBase')
+            if p.get('active') is not True:raise Failure('Покупатель отключён в PocketBase. Автоматическое включение отменено.')
+        else:
+            if api.rows('payers','kod_pay = '+json.dumps(actual['kod'])):raise Failure('Код покупателя уже связан с другой записью.')
+            definition=api.call('/api/collections/payers')
+            if any(f['name']=='contact_email' and f.get('required') for f in definition['fields']):raise Failure('В текущей схеме обязателен email покупателя. Нужен реальный контакт для подключения, он не выдумывается.')
+            p={'id':'','id_pay':pid,'kod_pay':actual['kod'],'name_pay':actual['name'],'active':True,'_new':True}
         rows=api.call('/payers/'+str(pid)+'/clients',kis=True)
         if not isinstance(rows,list):raise Failure('Неверный список получателей КИС.')
         c=only([r for r in rows if r.get('id')==cid],'Получатель '+str(cid))
@@ -73,6 +83,10 @@ def main():
             if {(r['payer'],r['scope'],r['kis_client_id']) for r in rs}!=expected or any(r.get('active') is not True for r in rs):raise Failure('У существующего демо-пользователя другой или неполный набор прав. Автоматическое изменение отменено.')
             if not u.get('active'):raise Failure('Существующий демо-пользователь отключён. Автоматическое включение отменено.')
             s['existing']=True
+    for pid,p in list(payers.items()):
+        if p.get('_new'):
+            payers[pid]=api.create('payers',{k:p[k] for k in ['id_pay','kod_pay','name_pay','active']})
+            print('PAYER_REGISTERED_FROM_KIS:',pid,p['name_pay'])
     for s in scenarios:
         if s.get('existing'): print('ALREADY_EXISTS:',s['email']);continue
         # New user remains inactive until every grant has been saved and verified.

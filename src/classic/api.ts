@@ -3,7 +3,7 @@ export interface Context { user: {name: string; role: Role}; payers: {id:string;
 export interface Client { id:number;code:string;name:string;address:string }
 export interface Product { id:number;kod:string;name:string;weight:number|null;shelf_life:string|number|null;kol_sht:number|null;cenaotp:number|null;basecenaotp:number|null;procskd:number|null;kolshtordmin:number|null }
 export interface Order { id:number;order_number?:string|number;order_date?:string|number;create_date?:string|number;kol_sht?:number;sum_all?:number;state?:string|number }
-export interface Item {id:number;code:string;name:string;quantity:number;price:number;sum:number}
+export interface Item {id:number;code:string;name:string;quantity:number;price:number;sum:number;line?:number;returned?:number|null}
 export interface Detail {payer:string;client:number;order:Order;items:Item[]|null;itemsAvailable:boolean}
 export interface Options {create:boolean;details:boolean;minimumSum:number|null;minimumSumIncludesVat:boolean|null;reason:string}
 export const CLOSED:Options={create:false,details:false,minimumSum:null,minimumSumIncludesVat:null,reason:'Отправка заказа ещё не подключена.'};
@@ -12,9 +12,19 @@ let session:{token:string;id:string;email:string}|null=null;
 export const getSession=()=>session;
 export function clearSession(){session=null;try{sessionStorage.removeItem(KEY);}catch{}}
 export class ApiError extends Error {constructor(public status:number,public code:string){super(code);}}
-export const message=(e:unknown)=>e instanceof ApiError ? ({401:'Сессия завершена. Войдите снова.',403:'Доступ изменён или запрещён.',501:'Отправка ожидает подключения к КИС.',504:'КИС не ответила вовремя. Повторите загрузку.'}[e.status]||'Не удалось получить данные. Код: '+e.code) : e instanceof Error&&e.name==='AbortError'?'Запрос отменён.':'Не удалось выполнить запрос. Попробуйте ещё раз.';
+const explanations:Record<string,string>={
+ PRICE_CHANGED:'Цена изменилась. Обновите прайс-лист и проверьте заказ.',
+ PRODUCT_UNAVAILABLE:'Товар больше недоступен для этой даты. Обновите прайс-лист.',
+ MINIMUM_QUANTITY:'Количество меньше минимального. Проверьте позиции заказа.',
+ DATE_IN_PAST:'Дата заказа уже прошла. Выберите новую дату.',
+ KIS_CONTRACT_MISMATCH:'КИС отклонила создание: ошибка параметра aId_Clt на стороне API. Передайте код KIS_CONTRACT_MISMATCH администратору.',
+ KIS_REJECTED:'КИС отклонила заказ. Проверьте дату, ограничения получателя и минимальную сумму; при повторной ошибке обратитесь к менеджеру.',
+ SUBMISSION_UNKNOWN:'Результат отправки пока не подтверждён. Проверьте результат и историю; повторная отправка заблокирована.',
+ IDEMPOTENCY_CONFLICT:'Содержимое запроса изменилось. Проверьте результат предыдущей отправки.'
+};
+export const message=(e:unknown)=>e instanceof ApiError ? (explanations[e.code]||{401:'Сессия завершена. Войдите снова.',403:'Доступ изменён или запрещён.',504:'КИС не ответила вовремя. Повторите загрузку.'}[e.status]||'Не удалось получить данные. Код: '+e.code) : e instanceof Error&&e.name==='AbortError'?'Запрос отменён.':'Не удалось выполнить запрос. Попробуйте ещё раз.';
 export async function request<T>(path:string,options:RequestInit={}):Promise<T>{
-  if(path!=='/service/account/change-password'&&!/^\/service\/(context|clients|catalog|orders(?:\/\d+)?|order-options)(\?|$)/.test(path)&&!/^\/api\/collections\/users\/(auth-with-password|auth-refresh|records\/[a-z0-9]{15})$/.test(path))throw new Error('Unexpected route');
+  if(path!=='/service/account/change-password'&&!/^\/service\/(context|clients|catalog|orders(?:\/\d+)?|order-requests\/[a-f0-9]{32}|order-options)(\?|$)/.test(path)&&!/^\/api\/collections\/users\/(auth-with-password|auth-refresh|records\/[a-z0-9]{15})$/.test(path))throw new Error('Unexpected route');
   const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),60000);
   const abort=()=>ctrl.abort();options.signal?.addEventListener('abort',abort,{once:true});
   if(options.signal?.aborted)ctrl.abort();
@@ -50,3 +60,17 @@ export async function catalog(payer:string,client:number,date:string,group:numbe
  return d.products;
 }
 export async function orders(payer:string,client:number,signal:AbortSignal){const d=await request<{payer:string;client:number;count:number;orders:Order[]}>('/service/orders?'+params(payer,client),{signal});if(d.payer!==payer||d.client!==client||!Array.isArray(d.orders)||d.count!==d.orders.length||new Set(d.orders.map(o=>o.id)).size!==d.orders.length||d.orders.some(o=>!validId(o.id)))throw new ApiError(502,'INVALID_ORDERS');return d.orders;}
+
+export interface OrderDraft {payer:string;client:number;DateOrd:number;Group:number;products:{id:number;quantity:number;price:number}[]}
+export interface Submission {key:string;body:OrderDraft}
+export interface SubmissionStatus {state:'pending'|'unknown'|'success'|'rejected'|'not_found';result:{id?:number;code?:string}|null}
+function pendingKey(){if(!session)throw new ApiError(401,'AUTH_REQUIRED');return 'karavay_pending_order_'+session.id;}
+export function pending():Submission|null {try{return JSON.parse(sessionStorage.getItem(pendingKey())||'null');}catch{return null;}}
+export function savePending(body:OrderDraft){const value={key:Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join(''),body};sessionStorage.setItem(pendingKey(),JSON.stringify(value));return value;}
+export function forgetPending(){sessionStorage.removeItem(pendingKey());}
+export function submissionStatus(s:Submission){return request<SubmissionStatus>('/service/order-requests/'+s.key+'?'+params(s.body.payer,s.body.client));}
+export async function orderPage(payer:string,client:number,offset:number){
+ const d=await request<{payer:string;client:number;count:number;orders:Order[];hasMore?:boolean;nextOffset?:number|null}>('/service/orders?'+params(payer,client)+(offset?'&offset='+offset:''));
+ if(d.payer!==payer||d.client!==client||!Array.isArray(d.orders)||d.count!==d.orders.length||d.orders.some(o=>!validId(o.id))||(d.hasMore===true&&(!validId(d.nextOffset)||d.nextOffset<=offset)))throw new ApiError(502,'INVALID_ORDERS');
+ return {orders:d.orders,hasMore:d.hasMore===true,nextOffset:d.nextOffset||0};
+}
