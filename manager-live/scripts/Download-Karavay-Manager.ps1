@@ -2,14 +2,14 @@ param([switch]$CopyToVM)
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $base = 'https://raw.githubusercontent.com/nikitinad17-ai/Karavay_LK/feature/manager-cabinet-v0.3/manager-live'
-$label = 'Karavay-Auto-0.6.2-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+$label = 'Karavay-Auto-0.7.0-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
 $folder = Join-Path (Join-Path $env:USERPROFILE 'Downloads') $label
 New-Item -ItemType Directory -Path $folder | Out-Null
 Invoke-WebRequest -Uri ($base + '/MANIFEST.json') -OutFile (Join-Path $folder 'MANIFEST.json')
 $manifest = Get-Content -LiteralPath (Join-Path $folder 'MANIFEST.json') -Raw | ConvertFrom-Json
 $paths = @($manifest.package.PSObject.Properties.Name) + @('scripts/install.py')
 foreach ($path in $paths) {
-    if ($path -notmatch '^(pb_hooks|pb_public|scripts)/[A-Za-z0-9/_.-]+$' -or $path.Contains('..')) { throw 'Unexpected package path.' }
+    if ($path -notmatch '^(pb_hooks|pb_public|pb_migrations|scripts)/[A-Za-z0-9/_.-]+$' -or $path.Contains('..')) { throw 'Unexpected package path.' }
     $local = Join-Path $folder $path
     New-Item -ItemType Directory -Path (Split-Path $local) -Force | Out-Null
     Invoke-WebRequest -Uri ($base + '/' + $path) -OutFile $local

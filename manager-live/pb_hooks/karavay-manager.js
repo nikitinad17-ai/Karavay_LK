@@ -42,7 +42,7 @@ function target(app,m,uid) {
   if(u.id===m.user.id || !['owner','viewer'].includes(u.get('role_code')))fail(403,'ACCESS_DENIED');
   const rs=rows(app,'rights','user = {:uid}',{uid});
   // Include inactive rights: a disabled assignment outside scope still protects the account.
-  if(!rs.length || !rs.every(r=>validRight(m,r)))fail(403,'SHARED_ACCOUNT');
+  if((!rs.length && u.get('manager_owner')!==m.user.id) || !rs.every(r=>validRight(m,r)))fail(403,'SHARED_ACCOUNT');
   return {user:u,rights:rs};
 }
 function kis(path) {
@@ -93,17 +93,51 @@ function cacheClient(app,payer,x) {
   if(!found.length)c.set('active',true);
   app.save(c);return c;
 }
+function newBuyerArea(app,m,kid,directory) {
+  if(!id(kid))fail(400,'INVALID_ID');
+  const existing=rows(app,'payers','id_pay = {:kid}',{kid});
+  if(existing.length) {if(existing.length!==1)fail(409,'CLIENT_MAPPING_CONFLICT');return {area:area(m,existing[0].id,false,true),payer:existing[0].id};}
+  const k=directory.find(x=>x.id===kid&&x.connection==='available');if(!k)fail(403,'ACCESS_DENIED');
+  return {area:{record:{get:key=>key==='id_pay'?kid:null},all:true,ids:new Set()},payer:'',newBuyer:k};
+}
 function assignments(app,m,input) {
-  if(!Array.isArray(input)||!input.length||input.length>100)fail(400,'RIGHTS_REQUIRED');
-  const seen=new Set(), result=[], lists=new Map();
+  if(!Array.isArray(input)||input.length>100)fail(400,'INVALID_RIGHT');
+  const seen=new Set(), result=[], lists=new Map(), areas=new Map();let directory=null;
   for(const r of input) {
-    const a=area(m,r.payer,r.scope==='all',true), kid=r.kis_client_id;
-    if(!((r.scope==='all'&&kid===0)||(r.scope==='client'&&id(kid))))fail(400,'INVALID_RIGHT');
-    const key=r.payer+':'+kid;if(seen.has(key))fail(400,'DUPLICATE_RIGHT');seen.add(key);
-    if(r.scope==='client'&&!lists.has(r.payer))lists.set(r.payer,candidates(a));
-    result.push({payer:r.payer,scope:r.scope,kis_client_id:kid,client:r.scope==='client'?selected(a,kid,lists.get(r.payer)):null});
+    if(!r||!((r.scope==='all'&&r.kis_client_id===0)||(r.scope==='client'&&id(r.kis_client_id))))fail(400,'INVALID_RIGHT');
+    if(r.payer&&r.kis_payer_id)fail(400,'INVALID_RIGHT');
+    const key=r.payer||'kis:'+r.kis_payer_id;
+    if(!areas.has(key)) {
+      if(r.payer)areas.set(key,{payer:r.payer,area:area(m,r.payer,false,true)});
+      else {if(!directory)directory=buyerCandidates(app,m,true);areas.set(key,newBuyerArea(app,m,r.kis_payer_id,directory));}
+    }
+    const item=areas.get(key),a=item.area,kid=r.kis_client_id;
+    if(r.scope==='all'&&!a.all)fail(403,'ACCESS_DENIED');
+    const unique=key+':'+kid;if(seen.has(unique))fail(400,'DUPLICATE_RIGHT');seen.add(unique);
+    if(!lists.has(key)&&(r.scope==='client'||item.newBuyer))lists.set(key,candidates(a));
+    if(item.newBuyer&&r.scope==='all'){const list=lists.get(key);if(!list.length)fail(409,'PAYER_NOT_VERIFIED');selected(a,list[0].id,list);}
+    result.push({payer:item.payer,newBuyer:item.newBuyer,scope:r.scope,kis_client_id:kid,client:r.scope==='client'?selected(a,kid,lists.get(key)):null});
   }
   return result;
+}
+function materialize(app,m,rs) {
+  const added=new Map();
+  return rs.map(r=>{
+    if(!r.newBuyer) {
+      const a=area(m,r.payer,r.scope==='all',true);
+      if(r.scope==='client'&&!a.all&&!a.ids.has(r.kis_client_id))fail(403,'ACCESS_CHANGED');
+      return r;
+    }
+    const k=r.newBuyer;
+    if(!added.has(k.id)) {
+      if(rows(app,'payers','id_pay = {:kid} || kod_pay = {:code}',{kid:k.id,code:k.code}).length)fail(409,'PAYER_ALREADY_REGISTERED');
+      const p=new Record(app.findCollectionByNameOrId('payers'));
+      p.set('id_pay',k.id);p.set('kod_pay',text(k.code,100));p.set('name_pay',text(k.name,300));p.set('active',true);app.save(p);
+      const right=new Record(app.findCollectionByNameOrId('rights'));
+      right.set('user',m.user.id);right.set('payer',p.id);right.set('scope','all');right.set('kis_client_id',0);right.set('active',true);app.save(right);added.set(k.id,p.id);
+    }
+    return {...r,payer:added.get(k.id)};
+  });
 }
 function saveRights(app,uid,rs) {
   const old=rows(app,'rights','user = {:uid}',{uid});for(const r of old)app.delete(r);
@@ -135,10 +169,15 @@ function state(app,uid) {
       users.get(u.id).rights.push({id:r.id,payer:pid,scope:r.get('scope'),kis_client_id:r.get('kis_client_id'),active:r.get('active')});
     }
   }
+  for(const u of rows(app,'users','manager_owner = {:uid}',{uid})) {
+    if(users.has(u.id)||!['owner','viewer'].includes(u.get('role_code')))continue;
+    const rs=rows(app,'rights','user = {:id}',{id:u.id});if(rs.length)continue;
+    users.set(u.id,{id:u.id,name:u.get('name'),email:u.get('email'),login:u.get('login'),role_code:u.get('role_code'),active:u.get('active'),must_change_password:u.get('must_change_password'),editable:true,rights:[]});
+  }
   const now=manager(app,uid);
   const signature=x=>JSON.stringify(Array.from(x.map,([pid,a])=>[pid,a.all,Array.from(a.ids).sort(),a.record.get('id_pay'),a.record.get('active')]).sort());
   if(signature(m)!==signature(now))fail(403,'ACCESS_CHANGED');
-  return {version:'0.6.2',manager:{id:uid,name:m.user.get('name')},payers,users:Array.from(users.values())};
+  return {version:'0.7.0',manager:{id:uid,name:m.user.get('name')},payers,users:Array.from(users.values())};
 }
 function mutate(e,b) {
   const uid=e.auth.id, app=e.app, m=manager(app,uid);
@@ -146,7 +185,8 @@ function mutate(e,b) {
   if(!b||!allowed.includes(b.action))fail(400,'INVALID_ACTION');
   let prepared=null, input=null, picked=null;
   if(['create_user','edit_user'].includes(b.action)) input=userInput(app,b);
-  if(b.action==='create_user'||b.action==='set_rights')prepared=assignments(app,m,b.rights);
+  if(b.action==='set_rights')target(app,m,b.user);
+  if(b.action==='create_user'||b.action==='set_rights')prepared=assignments(app,m,b.rights===undefined&&b.action==='create_user'?[]:b.rights);
   if(b.action==='create_user' && (typeof b.password!=='string'||b.password.length<12||b.password.length>128))fail(400,'PASSWORD_TOO_SHORT');
   if(b.action==='attach_client')picked=selected(area(m,b.payer,false,true),b.kis_client_id);
   if(b.action==='reset_password'){
@@ -168,7 +208,7 @@ function mutate(e,b) {
   let result;
   app.runInTransaction(tx=>{
     const fresh=manager(tx,uid);
-    if(prepared)for(const r of prepared) {
+    if(prepared)for(const r of prepared.filter(r=>!r.newBuyer)) {
       const a=area(fresh,r.payer,r.scope==='all',true);
       if(r.scope==='client'&&!a.all&&!a.ids.has(r.kis_client_id))fail(403,'ACCESS_CHANGED');
       if(m.map.get(r.payer).record.get('id_pay')!==a.record.get('id_pay'))fail(403,'ACCESS_CHANGED');
@@ -176,14 +216,14 @@ function mutate(e,b) {
     if(b.action==='create_user'){
       const data=userInput(tx,b),u=new Record(tx.findCollectionByNameOrId('users'));
       for(const k of Object.keys(data))u.set(k,data[k]);
-      u.setPassword(b.password);u.set('active',true);u.set('must_change_password',true);tx.save(u);saveRights(tx,u.id,prepared);result={id:u.id};
+      u.setPassword(b.password);u.set('active',true);u.set('must_change_password',true);u.set('manager_owner',uid);tx.save(u);saveRights(tx,u.id,materialize(tx,fresh,prepared));result={id:u.id};
     }else if(['edit_user','toggle_user','set_rights'].includes(b.action)){
       const t=target(tx,fresh,b.user),u=t.user;
       if(b.action==='edit_user'){
         const data=userInput(tx,b);if(u.get('email')!==data.email)u.setVerified(false);for(const k of Object.keys(data))u.set(k,data[k]);u.refreshTokenKey();tx.save(u);
       }else if(b.action==='toggle_user'){
         if(typeof b.active!=='boolean')fail(400,'INVALID_INPUT');u.set('active',b.active);u.refreshTokenKey();tx.save(u);
-      }else saveRights(tx,u.id,prepared);
+      }else {const rs=materialize(tx,fresh,prepared);saveRights(tx,u.id,rs);if(!rs.length){u.set('manager_owner',uid);tx.save(u);}}
       result={id:u.id};
     }else if(b.action==='create_payer'){
       if(rows(tx,'payers','id_pay = {:kid} || kod_pay = {:code}',{kid:b.id_pay,code:b.code}).length)fail(409,'PAYER_ALREADY_REGISTERED');
@@ -216,6 +256,13 @@ function route(e,kind) {
       if(e.request.url.rawQuery)fail(400,'INVALID_PARAMETERS');
       const m=manager(e.app,e.auth.id),list=buyerCandidates(e.app,m);manager(e.app,e.auth.id);
       return e.json(200,{buyers:list});
+    }
+    if(kind==='kis_clients') {
+      const q=/^payer=([1-9][0-9]{0,15})$/.exec(e.request.url.rawQuery||'');if(!q||!id(Number(q[1])))fail(400,'INVALID_PARAMETERS');
+      const m=manager(e.app,e.auth.id),directory=buyerCandidates(e.app,m,true),a=newBuyerArea(e.app,m,Number(q[1]),directory),list=candidates(a.area);
+      const now=manager(e.app,e.auth.id),fresh=newBuyerArea(e.app,now,Number(q[1]),directory);
+      if(a.payer!==fresh.payer)fail(403,'ACCESS_CHANGED');
+      return e.json(200,{clients:list.filter(x=>fresh.area.all||fresh.area.ids.has(x.id))});
     }
     if(kind==='clients') {
       const q=/^payer=([a-z0-9]{15})$/.exec(e.request.url.rawQuery||'');if(!q)fail(400,'INVALID_PARAMETERS');

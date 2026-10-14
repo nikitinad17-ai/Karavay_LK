@@ -52,6 +52,15 @@ print(raw,end='\\n__KIS_HTTP__:200')
   try:
    with urllib.request.urlopen(req) as r:assert r.status==204
   except urllib.error.HTTPError as e:raise RuntimeError(e.read().decode())
+  # Apply the exact shipped additive migration to the pre-update fixture schema.
+  process.terminate();process.wait(timeout=10)
+  shutil.copytree(ROOT/'pb_migrations',d/'pb_migrations')
+  subprocess.run([BINARY,'migrate','up','--dir',str(d/'pb_data'),'--migrationsDir',str(d/'pb_migrations')],cwd=d,env=env,check=True,stdout=subprocess.DEVNULL)
+  subprocess.run([BINARY,'migrate','up','--dir',str(d/'pb_data'),'--migrationsDir',str(d/'pb_migrations')],cwd=d,env=env,check=True,stdout=subprocess.DEVNULL)
+  process=subprocess.Popen([BINARY,'serve','--http=127.0.0.1:18943','--dir',str(d/'pb_data'),'--hooksDir',str(d/'pb_hooks'),'--publicDir',str(d/'pb_public')],cwd=d,env=env,stdout=log,stderr=log)
+  for i in range(100):
+   try:request('/api/health');break
+   except Exception:time.sleep(.1)
   def create(col,body):return request('/api/collections/'+col+'/records',body,admin)['id']
   roles={code:create('roles',{'code_role':code,'name_role':code,'active':True}) for code in ['owner','manager','viewer']}
   def user(login,role='manager',active=True):return create('users',{'name':login,'login':login,'email':login+'@example.test','role':roles[role],'role_code':role,'active':active,'must_change_password':False,'password':password,'passwordConfirm':password})
@@ -90,6 +99,22 @@ print(raw,end='\\n__KIS_HTTP__:200')
   assert len(check('/service/manager/clients?payer='+p1)['clients'])==2
   check('/service/manager/action',{'action':'attach_client','payer':p1,'kis_client_id':21},expect=403)
   for kid in [11,12]:check('/service/manager/action',{'action':'attach_client','payer':p1,'kis_client_id':kid})
+  draft=check('/service/manager/action',{'action':'create_user','name':'Pending demo','login':'pendingdemo','email':'pending@example.test','role_code':'viewer','password':password})['id']
+  pending=next(u for u in check('/service/manager/state')['users'] if u['id']==draft);assert pending['rights']==[] and pending['editable']
+  other_token=auth('other')
+  assert draft not in [u['id'] for u in check('/service/manager/state',t=other_token)['users']]
+  check('/service/manager/action',{'action':'set_rights','user':draft,'rights':[{'payer':p2,'scope':'all','kis_client_id':0}]},t=other_token,expect=403)
+  check('/service/manager/kis-clients?payer=2',expect=403)
+  assert check('/service/manager/kis-clients?payer=4')['clients'][0]['id']==41
+  check('/service/manager/action',{'action':'set_rights','user':draft,'rights':[{'kis_payer_id':4,'scope':'client','kis_client_id':21}]},expect=403)
+  assert not request('/api/collections/payers/records?filter=id_pay%3D4',token=admin)['items']
+  pending_auth=request('/api/collections/users/auth-with-password',{'identity':'pending@example.test','password':password})['token']
+  check('/service/account/change-password',{'oldPassword':password,'password':password+'draft'},t=pending_auth)
+  pending_auth=request('/api/collections/users/auth-with-password',{'identity':'pending@example.test','password':password+'draft'})['token']
+  check('/service/context',t=pending_auth,expect=403)
+  check('/service/manager/action',{'action':'set_rights','user':draft,'rights':[{'payer':p1,'scope':'client','kis_client_id':11}]})
+  check('/service/manager/action',{'action':'set_rights','user':draft,'rights':[]})
+  assert next(u for u in check('/service/manager/state')['users'] if u['id']==draft)['rights']==[]
   rs=[{'payer':p1,'scope':'client','kis_client_id':kid} for kid in [11,12]]
   body={'action':'create_user','name':'New customer','login':'newcustomer','email':'new@example.test','role_code':'viewer','password':password,'rights':rs}
   uid=check('/service/manager/action',body)['id']
@@ -142,6 +167,18 @@ print(raw,end='\\n__KIS_HTTP__:200')
   resetAuth=request('/api/collections/users/auth-with-password',{'identity':'resetcustomer@example.test','password':password+'reset'});assert resetAuth['record']['must_change_password'] is False
   # DOM integration uses real HTTP requests to the isolated PB (no browser rendering).
   subprocess.run(['node',str(ROOT/'tests/ui.cjs')],input=json.dumps({'url':base,'email':'manager@example.test','password':password}),text=True,check=True,cwd=ROOT.parent)
+  # Run the delivered demo script logic on the same real PB fixture and KIS stub.
+  spec=importlib.util.spec_from_file_location('manager_demo',ROOT/'scripts/Create-Demo-Users.py');demomod=importlib.util.module_from_spec(spec);spec.loader.exec_module(demomod);demomod.BASE=base
+  demoapi=demomod.Api();demoapi.token=token
+  output=demomod.provision(demoapi,d);credentials=json.loads(output.read_text());assert output.stat().st_mode&0o777==0o600
+  assert len(credentials['accounts'])==2 and all(x['status']=='ready' for x in credentials['accounts'])
+  assert [len(x['assignments']) for x in credentials['accounts']]==[1,2];checks+=3
+  before=output.read_bytes();assert demomod.provision(demoapi,d)==output and output.read_bytes()==before;checks+=1
+  for entry in credentials['accounts']:
+   da=request('/api/collections/users/auth-with-password',{'identity':entry['email'],'password':entry['password']});assert da['record']['must_change_password']
+   check('/service/account/change-password',{'oldPassword':entry['password'],'password':entry['password']+'updated'},t=da['token'])
+   da=request('/api/collections/users/auth-with-password',{'identity':entry['email'],'password':entry['password']+'updated'})
+   context=check('/service/context',t=da['token']);assert len(context['payers'])==len(entry['assignments'])
   newtoken=request('/api/collections/users/auth-with-password' ,{'identity':'new@example.test','password':password})['token']
   check('/service/account/change-password',{'oldPassword':'wrong','password':password+'new'},t=newtoken,expect=403)
   check('/service/account/change-password',{'oldPassword':password,'password':password+'new'},t=newtoken)

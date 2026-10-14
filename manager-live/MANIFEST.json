@@ -1,13 +1,13 @@
 {
-  "version": "0.6.2",
+  "version": "0.7.0",
   "package": {
-    "pb_hooks/karavay-manager.js": "8300583e9c7882465d1244ce83884eb500c77055910bd7bc21dd9ecbb3da343b",
-    "pb_hooks/karavay-manager.pb.js": "bc706f9e4ecc59e97b58ac6353ee83e91af2fd7b49f7431607d5173e8faa6288",
-    "pb_public/manager/app.js": "26f6aadd5fe06586f1892db1eb49c808dbd311d1119b506dbe00274cac53df95",
-    "pb_public/manager/index.html": "22411f722e0761ec94495401c4215aa19b54962638ec3acc8f196ae2a5ff7b49",
+    "pb_hooks/karavay-manager.js": "c57e80de2f3d07206934fcda9117acf4d26fab2cb80bc7e74ec52a9a8fb4eb22",
+    "pb_hooks/karavay-manager.pb.js": "6e6263987319a4e424d2dd73d9fc818b21d1b901e1ebcc1a0ef312da98e727f1",
+    "pb_public/manager/app.js": "3d41f447777d27aa006c66c7af0d05c3abe07c6372db452191498e9f9209126c",
+    "pb_public/manager/index.html": "7ec4f888641976f3f987e26674635d26d40c7db428dd77b0e95923390404722e",
     "pb_public/manager/logo.svg": "81bf7fde81d948a903513f9abf2685ee9dc73753651da2ddbd0bc2baa6ba8df7",
-    "pb_public/manager/styles.css": "c3627153d178406159cbf7c8f1d0d9b66a5e8d4548da6a49fcc563b90bb4254e",
-    "pb_public/index.html": "54d6097346efb055507ae669697159a80cf13a73350c9cd50837a0571106ed2c"
+    "pb_public/manager/styles.css": "cd046199fb21c5a86de7ba7da50adc673d911e68dfc37e11f80f8ea6be79fdc0",
+    "pb_migrations/1791993600_manager_drafts.js": "0717feedd305f35d8ca59496a105cea61caccfb757964671d187324d7289f14c"
   },
   "gateway": {
     "karavay-context.pb.js": "f72ef461d7b34d4e97f84c461b3d2ff9dd4f1c9402b2f7dfa1ea796270ff9d0f",
@@ -58,37 +58,41 @@
       "active": "bool"
     }
   },
-  "installer_sha256": "9db764e7e5dedbaabc4b626f798b711f5ca2d2b9d0e29c51997a2c58e76c62ad",
-  "client_version": "3.7.3",
+  "installer_sha256": "ba3e517cb484c0d7fcbb1f85f7ce7f9549cfc710fd36e67131ae00f684fc8f94",
   "previous": {
     "pb_hooks/karavay-manager.js": [
       "e98ed1ad9de272e5283b251d5c3a072f685293db2cc452b6c90fba97e2cf7b2e",
       "681f7fbe21ce8638b16cd3423e0202159d43ad0de5a8a0a32f1b060bdd1abfeb",
       "d7df19e45e1f2d43969366c820701f304d5f160e60aa58abae1f2a010302a7eb",
-      "b2da42afa931902a5188198feca50bbfd5deb590c3667606b3c71c8633dd3c24"
+      "b2da42afa931902a5188198feca50bbfd5deb590c3667606b3c71c8633dd3c24",
+      "8300583e9c7882465d1244ce83884eb500c77055910bd7bc21dd9ecbb3da343b"
     ],
     "pb_hooks/karavay-manager.pb.js": [
       "abb0e95ef67c81eef2dfdebd8e29b2cf8296be0b64d085cb385d5a60190836ec",
-      "df57e13d7f77a6e051b23804e189fa61050bd911c56832d4e205c56630629337"
+      "df57e13d7f77a6e051b23804e189fa61050bd911c56832d4e205c56630629337",
+      "bc706f9e4ecc59e97b58ac6353ee83e91af2fd7b49f7431607d5173e8faa6288"
     ],
     "pb_public/manager/app.js": [
       "3cbd149168c61c60eda13eb26c68fc5fa3a75f7e39632a6bc3c566e74ecb2dc6",
       "121a36c1b61e9d31208560c24cd6398c537ff0b44670853795ba65215e25f960",
       "f0a869fc89cf33979b4417182387e022da84827637be865647eceb3353d20f8e",
-      "c8579e719d348cf8a0bb6033280c58859e817f3be95dbe52b4be8d70f512d0d5"
+      "c8579e719d348cf8a0bb6033280c58859e817f3be95dbe52b4be8d70f512d0d5",
+      "26f6aadd5fe06586f1892db1eb49c808dbd311d1119b506dbe00274cac53df95"
     ],
     "pb_public/manager/index.html": [
       "aeea602983172740027fa5f112edfe4b71627b8e0885d6208e285faa8d7dce09",
       "86fab95be8692555fdf2247d2b9c6aeae0d504681006aad1b99cb4503e64b515",
       "dc553431d0e518796bf0f9b96382a55ceaec2c325523bed2e4e71430017f88f7",
-      "8b84a5a342d64b5ce969b819faead6aa9d9c93803975b9413b7db9775d315373"
+      "8b84a5a342d64b5ce969b819faead6aa9d9c93803975b9413b7db9775d315373",
+      "22411f722e0761ec94495401c4215aa19b54962638ec3acc8f196ae2a5ff7b49"
     ],
     "pb_public/manager/logo.svg": [
       "81bf7fde81d948a903513f9abf2685ee9dc73753651da2ddbd0bc2baa6ba8df7"
     ],
     "pb_public/manager/styles.css": [
       "e1d1d52b1ee75b90660dc07af97dd160d5f9242e221037abe9f811f71d401101",
-      "66d6237ad546ae4ffe5329c7fad2df73c4626c7a5a394d50ec26a67d0d3d1175"
+      "66d6237ad546ae4ffe5329c7fad2df73c4626c7a5a394d50ec26a67d0d3d1175",
+      "c3627153d178406159cbf7c8f1d0d9b66a5e8d4548da6a49fcc563b90bb4254e"
     ],
     "pb_public/index.html": [
       "02574f1c1d0a98684aa8550ff5b3dccf1a5d9867bcddca3a4672c91518c4c12e",

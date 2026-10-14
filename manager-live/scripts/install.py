@@ -14,12 +14,17 @@ def main():
   if sha(SOURCE/name)!=digest:raise RuntimeError('Package hash mismatch: '+name)
  for name,digest in manifest['gateway'].items():
   if sha(root/'pb_hooks'/name) not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Installed gateway differs: '+name+'. Re-export hooks before proceeding.')
+ print('This release adds users.manager_owner for unassigned accounts; existing users, roles and rights are preserved.')
  db=root/'pb_data/data.db'
  if not db.is_file():raise RuntimeError('Database not found')
  # Read definitions only. No data is read, exported or changed during preflight.
  import sqlite3
  con=sqlite3.connect('file:'+str(db)+'?mode=ro',uri=True)
- defs={row[0]:json.loads(row[1]) for row in con.execute('SELECT name, fields FROM _collections')};con.close()
+ definitions=list(con.execute('SELECT id, name, fields FROM _collections'));defs={row[1]:json.loads(row[2]) for row in definitions};con.close()
+ owner=next((f for f in defs.get('users',[]) if f['name']=='manager_owner'),None)
+ users_id=next(row[0] for row in definitions if row[1]=='users')
+ if owner and (owner.get('type')!='relation' or owner.get('collectionId')!=users_id or owner.get('maxSelect')!=1 or owner.get('required')):raise RuntimeError('Conflicting users.manager_owner field')
+ if next(f for f in defs['payers'] if f['name']=='contact_email').get('required'):raise RuntimeError('payers.contact_email must be optional for KIS assignments')
  for col,required in manifest['required_fields'].items():
   fields={f['name']:f for f in defs.get(col,[])}
   for name,kind in required.items():
@@ -53,20 +58,21 @@ def main():
      if r.status==200:break
    except Exception:time.sleep(.2)
   else:raise RuntimeError('Health check failed')
-  for path in ['/service/context','/service/manager/state','/service/manager/buyers','/service/manager/directory']:
+  for path in ['/service/context','/service/manager/state','/service/manager/buyers','/service/manager/directory','/service/manager/kis-clients']:
    try:urllib.request.urlopen('http://127.0.0.1:8090'+path,timeout=5);raise RuntimeError('Unauthenticated endpoint is unexpectedly open')
    except urllib.error.HTTPError as e:
     if e.code!=401:raise RuntimeError('Smoke failed: '+path+' '+str(e.code))
     json.loads(e.read())
   with urllib.request.urlopen('http://127.0.0.1:8090/manager/',timeout=5) as r:
-   if b'0.6.2' not in r.read():raise RuntimeError('Manager HTML check failed')
-  with urllib.request.urlopen('http://127.0.0.1:8090/',timeout=5) as r:
-   if b'3.7.3' not in r.read():raise RuntimeError('Client HTML check failed')
+   if b'0.7.0' not in r.read():raise RuntimeError('Manager HTML check failed')
+  con=sqlite3.connect('file:'+str(db)+'?mode=ro',uri=True)
+  fields=json.loads(con.execute("SELECT fields FROM _collections WHERE name='users'").fetchone()[0]);con.close()
+  if not any(f['name']=='manager_owner' and f['type']=='relation' for f in fields):raise RuntimeError('Ownership migration was not applied')
   for name,digest in manifest['gateway'].items():
    if sha(root/'pb_hooks'/name) not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Gateway changed unexpectedly')
   print('AUTO_DIRECTORY_INSTALLED: http://192.168.25.98:8090/manager/')
   print('BACKUP:',backup)
-  print('Manager 0.6.2 and client 3.7.3 installed; gateway preserved; no schema migrations.')
+  print('Manager 0.7.0 installed; client and gateway preserved; users.manager_owner added.')
  except Exception:
   run('systemctl','stop','pocketbase')
   for name in copied:
@@ -74,6 +80,6 @@ def main():
    if name in existing:shutil.copy2(backup/name,dst)
    else:dst.unlink(missing_ok=True)
   run('systemctl','start','pocketbase')
-  print('ROLLED_BACK: manager files restored. Database snapshot retained at',backup)
+  print('ROLLED_BACK: manager files restored. Database snapshot retained (additive ownership field may remain) at',backup)
   raise
 if __name__=='__main__':main()
