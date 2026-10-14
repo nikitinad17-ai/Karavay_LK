@@ -1,0 +1,10 @@
+{
+  "version": "3.8-preparation",
+  "status": "awaiting-kis-order-contract",
+  "html_sha256": "1ef3bcdd06febd09d224db4ece737bc177cd4a97eb725d9b37d95947decb37dc",
+  "base_client": "3.7.3",
+  "design": "3.6.4",
+  "create_order_enabled": false,
+  "order_lines_enabled": false,
+  "manager_modified": false
+}
