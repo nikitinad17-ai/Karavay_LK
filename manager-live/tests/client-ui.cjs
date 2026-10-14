@@ -1,7 +1,9 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{JSDOM}=require('jsdom');
 const settings=JSON.parse(fs.readFileSync(0,'utf8'));
 (async()=>{
+ const crypto=require('node:crypto');
  const html=fs.readFileSync(path.join(__dirname,'../pb_public/index.html'),'utf8');
+ const inline=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1];const digest=crypto.createHash('sha256').update(inline).digest('base64');assert(html.includes("script-src 'sha256-"+digest+"'"),'CSP must match the exact inline script');
  const dom=new JSDOM(html,{url:settings.url+'/',runScripts:'outside-only'}),w=dom.window;
  const calls=[];w.fetch=(url,options)=>{calls.push(url);return fetch(new URL(url,settings.url),options);};w.AbortController=AbortController;w.confirm=()=>true;w.scrollTo=()=>{};
  w.eval([...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1]);

@@ -78,9 +78,9 @@ function candidates(a) {
   for(const x of list){if(!x||!id(x.id)||seen.has(x.id))fail(502,'INVALID_KIS_LIST');seen.add(x.id);}
   return list.filter(x=>a.all||a.ids.has(x.id)).map(x=>({id:x.id,code:typeof x.kod==='string'?x.kod:'',name:typeof x.name==='string'?x.name:'',address:typeof x.adres==='string'?x.adres:''}));
 }
-function selected(a,kid) {
+function selected(a,kid,list=null) {
   if(!id(kid))fail(400,'INVALID_ID');
-  const x=candidates(a).find(x=>x.id===kid);if(!x)fail(403,'ACCESS_DENIED');
+  const x=(list||candidates(a)).find(x=>x.id===kid);if(!x)fail(403,'ACCESS_DENIED');
   const d=kis('/clients/'+kid);
   if(!d || d.id!==kid || d.payer_id!==a.record.get('id_pay') || d.state!==1)fail(403,'CLIENT_UNAVAILABLE');
   text(x.code,100);text(x.name,300);return x;
@@ -95,12 +95,13 @@ function cacheClient(app,payer,x) {
 }
 function assignments(app,m,input) {
   if(!Array.isArray(input)||!input.length||input.length>100)fail(400,'RIGHTS_REQUIRED');
-  const seen=new Set(), result=[];
+  const seen=new Set(), result=[], lists=new Map();
   for(const r of input) {
     const a=area(m,r.payer,r.scope==='all',true), kid=r.kis_client_id;
     if(!((r.scope==='all'&&kid===0)||(r.scope==='client'&&id(kid))))fail(400,'INVALID_RIGHT');
     const key=r.payer+':'+kid;if(seen.has(key))fail(400,'DUPLICATE_RIGHT');seen.add(key);
-    result.push({payer:r.payer,scope:r.scope,kis_client_id:kid,client:r.scope==='client'?selected(a,kid):null});
+    if(r.scope==='client'&&!lists.has(r.payer))lists.set(r.payer,candidates(a));
+    result.push({payer:r.payer,scope:r.scope,kis_client_id:kid,client:r.scope==='client'?selected(a,kid,lists.get(r.payer)):null});
   }
   return result;
 }
@@ -137,7 +138,7 @@ function state(app,uid) {
   const now=manager(app,uid);
   const signature=x=>JSON.stringify(Array.from(x.map,([pid,a])=>[pid,a.all,Array.from(a.ids).sort(),a.record.get('id_pay'),a.record.get('active')]).sort());
   if(signature(m)!==signature(now))fail(403,'ACCESS_CHANGED');
-  return {version:'0.5.0',manager:{name:m.user.get('name')},payers,users:Array.from(users.values())};
+  return {version:'0.6.0',manager:{name:m.user.get('name')},payers,users:Array.from(users.values())};
 }
 function mutate(e,b) {
   const uid=e.auth.id, app=e.app, m=manager(app,uid);

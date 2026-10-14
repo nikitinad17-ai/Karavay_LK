@@ -1,13 +1,13 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "package": {
-    "pb_hooks/karavay-manager.js": "681f7fbe21ce8638b16cd3423e0202159d43ad0de5a8a0a32f1b060bdd1abfeb",
+    "pb_hooks/karavay-manager.js": "d7df19e45e1f2d43969366c820701f304d5f160e60aa58abae1f2a010302a7eb",
     "pb_hooks/karavay-manager.pb.js": "df57e13d7f77a6e051b23804e189fa61050bd911c56832d4e205c56630629337",
-    "pb_public/manager/app.js": "121a36c1b61e9d31208560c24cd6398c537ff0b44670853795ba65215e25f960",
-    "pb_public/manager/index.html": "86fab95be8692555fdf2247d2b9c6aeae0d504681006aad1b99cb4503e64b515",
+    "pb_public/manager/app.js": "f0a869fc89cf33979b4417182387e022da84827637be865647eceb3353d20f8e",
+    "pb_public/manager/index.html": "dc553431d0e518796bf0f9b96382a55ceaec2c325523bed2e4e71430017f88f7",
     "pb_public/manager/logo.svg": "81bf7fde81d948a903513f9abf2685ee9dc73753651da2ddbd0bc2baa6ba8df7",
-    "pb_public/manager/styles.css": "e1d1d52b1ee75b90660dc07af97dd160d5f9242e221037abe9f811f71d401101",
-    "pb_public/index.html": "4cf2cac0f2c4cc237661308244ed4a8628412e7b27c34e60af08437c3c1f1720"
+    "pb_public/manager/styles.css": "66d6237ad546ae4ffe5329c7fad2df73c4626c7a5a394d50ec26a67d0d3d1175",
+    "pb_public/index.html": "54d6097346efb055507ae669697159a80cf13a73350c9cd50837a0571106ed2c"
   },
   "gateway": {
     "karavay-context.pb.js": "f72ef461d7b34d4e97f84c461b3d2ff9dd4f1c9402b2f7dfa1ea796270ff9d0f",
@@ -58,20 +58,24 @@
       "active": "bool"
     }
   },
-  "installer_sha256": "bba21bdb1d086a03dc579f5531e931bf1264efa9eec09af221551ea5315ee0b8",
+  "installer_sha256": "a9c78ff0f64c240fb1929fdd8f52fa94c4b63656cf88ff4eb46103b2c1cfb6c0",
   "client_version": "3.7.3",
   "previous": {
     "pb_hooks/karavay-manager.js": [
-      "e98ed1ad9de272e5283b251d5c3a072f685293db2cc452b6c90fba97e2cf7b2e"
+      "e98ed1ad9de272e5283b251d5c3a072f685293db2cc452b6c90fba97e2cf7b2e",
+      "681f7fbe21ce8638b16cd3423e0202159d43ad0de5a8a0a32f1b060bdd1abfeb"
     ],
     "pb_hooks/karavay-manager.pb.js": [
-      "abb0e95ef67c81eef2dfdebd8e29b2cf8296be0b64d085cb385d5a60190836ec"
+      "abb0e95ef67c81eef2dfdebd8e29b2cf8296be0b64d085cb385d5a60190836ec",
+      "df57e13d7f77a6e051b23804e189fa61050bd911c56832d4e205c56630629337"
     ],
     "pb_public/manager/app.js": [
-      "3cbd149168c61c60eda13eb26c68fc5fa3a75f7e39632a6bc3c566e74ecb2dc6"
+      "3cbd149168c61c60eda13eb26c68fc5fa3a75f7e39632a6bc3c566e74ecb2dc6",
+      "121a36c1b61e9d31208560c24cd6398c537ff0b44670853795ba65215e25f960"
     ],
     "pb_public/manager/index.html": [
-      "aeea602983172740027fa5f112edfe4b71627b8e0885d6208e285faa8d7dce09"
+      "aeea602983172740027fa5f112edfe4b71627b8e0885d6208e285faa8d7dce09",
+      "86fab95be8692555fdf2247d2b9c6aeae0d504681006aad1b99cb4503e64b515"
     ],
     "pb_public/manager/logo.svg": [
       "81bf7fde81d948a903513f9abf2685ee9dc73753651da2ddbd0bc2baa6ba8df7"
@@ -80,7 +84,7 @@
       "e1d1d52b1ee75b90660dc07af97dd160d5f9242e221037abe9f811f71d401101"
     ],
     "pb_public/index.html": [
-      "f61782b84ba5a280456a6e876c30206166318b6cc69cf8a4ba56e7599e53bffe"
+      "02574f1c1d0a98684aa8550ff5b3dccf1a5d9867bcddca3a4672c91518c4c12e"
     ]
   }
 }

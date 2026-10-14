@@ -2,7 +2,7 @@ param([switch]$CopyToVM)
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $base = 'https://raw.githubusercontent.com/nikitinad17-ai/Karavay_LK/feature/manager-cabinet-v0.3/manager-live'
-$label = 'Karavay-Auto-0.5-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+$label = 'Karavay-Auto-0.6-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
 $folder = Join-Path (Join-Path $env:USERPROFILE 'Downloads') $label
 New-Item -ItemType Directory -Path $folder | Out-Null
 Invoke-WebRequest -Uri ($base + '/MANIFEST.json') -OutFile (Join-Path $folder 'MANIFEST.json')

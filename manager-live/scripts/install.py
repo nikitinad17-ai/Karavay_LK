@@ -59,14 +59,14 @@ def main():
     if e.code!=401:raise RuntimeError('Smoke failed: '+path+' '+str(e.code))
     json.loads(e.read())
   with urllib.request.urlopen('http://127.0.0.1:8090/manager/',timeout=5) as r:
-   if b'0.5' not in r.read():raise RuntimeError('Manager HTML check failed')
+   if b'0.6' not in r.read():raise RuntimeError('Manager HTML check failed')
   with urllib.request.urlopen('http://127.0.0.1:8090/',timeout=5) as r:
    if b'3.7.3' not in r.read():raise RuntimeError('Client HTML check failed')
   for name,digest in manifest['gateway'].items():
    if sha(root/'pb_hooks'/name) not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Gateway changed unexpectedly')
   print('AUTO_DIRECTORY_INSTALLED: http://192.168.25.98:8090/manager/')
   print('BACKUP:',backup)
-  print('Client 3.7.3 and manager 0.5 installed; gateway preserved; no schema migrations.')
+  print('Manager 0.6 and client 3.7.3 installed; gateway preserved; no schema migrations.')
  except Exception:
   run('systemctl','stop','pocketbase')
   for name in copied:
