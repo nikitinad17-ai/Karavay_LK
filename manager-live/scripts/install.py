@@ -13,7 +13,7 @@ def main():
  for name,digest in manifest['package'].items():
   if sha(SOURCE/name)!=digest:raise RuntimeError('Package hash mismatch: '+name)
  for name,digest in manifest['gateway'].items():
-  if sha(root/'pb_hooks'/name)!=digest:raise RuntimeError('Installed gateway differs: '+name+'. Re-export hooks before proceeding.')
+  if sha(root/'pb_hooks'/name) not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Installed gateway differs: '+name+'. Re-export hooks before proceeding.')
  db=root/'pb_data/data.db'
  if not db.is_file():raise RuntimeError('Database not found')
  # Read definitions only. No data is read, exported or changed during preflight.
@@ -28,7 +28,7 @@ def main():
  if '0.40.3' not in version:raise RuntimeError('Expected PocketBase 0.40.3; found '+version.strip())
  for name in manifest['package']:
   dst=root/name
-  if dst.exists() and sha(dst)!=manifest['package'][name]:raise RuntimeError('Manager file already differs: '+name+'. Review before replacing.')
+  if dst.exists() and sha(dst) not in [manifest['package'][name],*manifest.get('previous',{}).get(name,[])]:raise RuntimeError('Manager file already differs: '+name+'. Review before replacing.')
  run('systemctl','is-active','pocketbase')
  print('PREFLIGHT: PASSED. Existing gateway and schema match; no server changes made.')
  if not args.install:return
@@ -53,18 +53,20 @@ def main():
      if r.status==200:break
    except Exception:time.sleep(.2)
   else:raise RuntimeError('Health check failed')
-  for path in ['/service/context','/service/manager/state']:
+  for path in ['/service/context','/service/manager/state','/service/manager/buyers']:
    try:urllib.request.urlopen('http://127.0.0.1:8090'+path,timeout=5);raise RuntimeError('Unauthenticated endpoint is unexpectedly open')
    except urllib.error.HTTPError as e:
     if e.code!=401:raise RuntimeError('Smoke failed: '+path+' '+str(e.code))
     json.loads(e.read())
   with urllib.request.urlopen('http://127.0.0.1:8090/manager/',timeout=5) as r:
-   if b'0.4' not in r.read():raise RuntimeError('Manager HTML check failed')
+   if b'0.5' not in r.read():raise RuntimeError('Manager HTML check failed')
+  with urllib.request.urlopen('http://127.0.0.1:8090/',timeout=5) as r:
+   if b'3.7.3' not in r.read():raise RuntimeError('Client HTML check failed')
   for name,digest in manifest['gateway'].items():
-   if sha(root/'pb_hooks'/name)!=digest:raise RuntimeError('Gateway changed unexpectedly')
-  print('MANAGER_INSTALLED: http://192.168.25.98:8090/manager/')
+   if sha(root/'pb_hooks'/name) not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Gateway changed unexpectedly')
+  print('AUTO_DIRECTORY_INSTALLED: http://192.168.25.98:8090/manager/')
   print('BACKUP:',backup)
-  print('Existing gateway preserved; no schema migrations. Next: manager-user acceptance.')
+  print('Client 3.7.3 and manager 0.5 installed; gateway preserved; no schema migrations.')
  except Exception:
   run('systemctl','stop','pocketbase')
   for name in copied:

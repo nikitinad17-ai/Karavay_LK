@@ -15,18 +15,24 @@ def request(path,body=None,token='',expect=200):
  return data
 with tempfile.TemporaryDirectory(prefix='karavay-manager-integration-') as temp:
  d=pathlib.Path(temp);(d/'bin').mkdir();shutil.copytree(ROOT/'pb_hooks',d/'pb_hooks');shutil.copytree(ROOT/'pb_public',d/'pb_public')
+ for hook in (ROOT/'tests/gateway-fixtures').glob('*.pb.js'):shutil.copy2(hook,d/'pb_hooks'/hook.name)
  (d/'bin/curl').write_text('''#!/usr/bin/env python3
 import sys,json
 p=sys.argv[sys.argv.index('--url')+1].split('/api/v1',1)[1]
 clients=[{'id':11,'kod':'CL11','name':'Test recipient 11','adres':'Test address'},{'id':12,'kod':'CL12','name':'Test recipient 12','adres':'Test address'}]
-if p=='/payers/1/clients': data=clients
+if p=='/payers': data=[{'id':i,'kod':'P'+str(i),'name':'New buyer' if i==3 else 'Buyer '+str(i),'adres':'Address'} for i in [1,2,3,4]]
+elif p=='/payers/1/clients': data=clients
 elif p=='/payers/3/clients': data=[{'id':31,'kod':'CL31','name':'New buyer recipient'}]
+elif p=='/payers/4/clients': data=[{'id':41,'kod':'CL41','name':'UI buyer recipient'}]
+elif p=='/clients/41': data={'id':41,'payer_id':4,'state':1}
 elif p=='/clients/31': data={'id':31,'payer_id':3,'state':1}
 elif p=='/payers/2/clients': data=[{'id':21,'kod':'CL21','name':'Foreign recipient'}]
 elif p in ['/clients/11','/clients/12']: data={'id':int(p.split('/')[-1]),'payer_id':1,'state':1}
 elif p=='/clients/21': data={'id':21,'payer_id':2,'state':1}
 else: data=None
-print(json.dumps({'success':data is not None,'data':data}),end='\\n__KIS_HTTP__:200')
+raw=json.dumps({'success':data is not None,'data':data})
+if p=='/payers': raw=raw.replace('\"adres\":', '\"saldo_calc\":.14,\"adres\":')
+print(raw,end='\\n__KIS_HTTP__:200')
 ''');(d/'bin/curl').chmod(0o755)
  env={**os.environ,'PATH':str(d/'bin')+':'+os.environ['PATH']}
  (d/'pb_hooks/testing.pb.js').write_text("routerAdd('GET','/__test_reset/{id}',e=>e.json(200,{token:e.app.findRecordById('users',e.request.pathValue('id')).newPasswordResetToken()}),$apis.requireAuth('_superusers'));")
@@ -74,6 +80,9 @@ print(json.dumps({'success':data is not None,'data':data}),end='\\n__KIS_HTTP__:
   check('/service/manager/state',t=vt,expect=403)
   check('/service/manager/state',t=ot,expect=403)
   s=check('/service/manager/state');assert [x['id'] for x in s['payers']]==[p1]
+  check('/service/manager/buyers',t='',expect=401)
+  check('/service/manager/buyers',t=vt,expect=403)
+  assert [p['id'] for p in check('/service/manager/buyers')['buyers']]==[3,4]
   check('/service/manager/clients?payer='+p2,expect=403)
   assert len(check('/service/manager/clients?payer='+p1)['clients'])==2
   check('/service/manager/action',{'action':'attach_client','payer':p1,'kis_client_id':21},expect=403)
@@ -96,7 +105,7 @@ print(json.dumps({'success':data is not None,'data':data}),end='\\n__KIS_HTTP__:
   request('/api/collections/rights/records',{'user':uid,'payer':p2,'scope':'all','kis_client_id':0,'active':False},admin)
   check('/service/manager/action',{'action':'toggle_user','user':uid,'active':False},expect=403)
   check('/service/manager/action',{'action':'create_payer','id_pay':2,'code':'P2','name':'Foreign','email':'p2@example.test'},expect=409)
-  check('/service/manager/action',{'action':'create_payer','id_pay':999,'code':'P999','name':'Missing','email':'x@example.test'},expect=502)
+  check('/service/manager/action',{'action':'create_payer','id_pay':999,'code':'P999','name':'Missing','email':'x@example.test'},expect=409)
   # Real PB token generation and native confirmation exercise the new hook.
   resetuid=user('resetcustomer','viewer');right(resetuid,p1)
   req=urllib.request.Request(base+'/api/collections/users/records/'+resetuid,data=json.dumps({'must_change_password':True}).encode(),headers={'Authorization':admin,'Content-Type':'application/json'},method='PATCH');urllib.request.urlopen(req).close()
@@ -136,8 +145,13 @@ print(json.dumps({'success':data is not None,'data':data}),end='\\n__KIS_HTTP__:
   check('/service/manager/state',t=newtoken,expect=401)
   newauth=request('/api/collections/users/auth-with-password',{'identity':'new@example.test','password':password+'new'});assert newauth['record']['must_change_password'] is False
   req=urllib.request.Request(base+'/api/collections/rights/records/'+rid,data=json.dumps({'active':False}).encode(),headers={'Authorization':admin,'Content-Type':'application/json'},method='PATCH');urllib.request.urlopen(req).close()
-  assert [p['id'] for p in check('/service/manager/state')['payers']]==[p3]
+  assert p1 not in [p['id'] for p in check('/service/manager/state')['payers']]
   check('/service/manager/action',{'action':'edit_payer','payer':p1,'name':'Changed','email':'x@example.test','active':True},expect=403)
+  # Client cabinet uses the same users/rights with live KIS recipients.
+  ctx=check('/service/context',t=newauth['token']);assert [p['id'] for p in ctx['payers']]==[p1]
+  cl=check('/service/clients?payer='+p1,t=newauth['token']);assert [c['id'] for c in cl['clients']]==[11,12]
+  check('/service/clients?payer='+p2,t=newauth['token'],expect=403)
+  subprocess.run(['node',str(ROOT/'tests/client-ui.cjs')],input=json.dumps({'url':base,'email':'new@example.test','password':password+'new'}),text=True,check=True,cwd=ROOT.parent)
   # Native collection writes remain closed to managers.
   check('/api/collections/payers/records',{'id_pay':7},expect=403)
   check('/api/collections/users/records',{'email':'hijack@example.test'},expect=403)

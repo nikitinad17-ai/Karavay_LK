@@ -50,8 +50,26 @@ function kis(path) {
   const args=['--disable','--silent','--show-error','--noproxy','*','--proto','=http','--max-redirs','0','--connect-timeout','3','--max-time','10','--max-filesize','2097152','-H','Accept: application/json','-w','\n__KIS_HTTP__:%{http_code}','--url','http://serv15db:55580/api/v1'+path];
   let raw;try{raw=toString($os.cmd('curl',...args).output());}catch(e){fail(String(e).includes('exit status 28')?504:502,'KIS_UNAVAILABLE');}
   const match=/\n__KIS_HTTP__:(\d{3})$/.exec(raw);if(!match || match[1]!=='200' || raw.length>2097152)fail(502,'KIS_UNAVAILABLE');
-  let doc;try{doc=JSON.parse(raw.slice(0,match.index));}catch(_){fail(502,'INVALID_KIS_JSON');}
+  let doc;try{doc=JSON.parse(normalizeKisNumbers(raw.slice(0,match.index)));}catch(_){fail(502,'INVALID_KIS_JSON');}
   if(!doc || doc.success!==true)fail(502,'INVALID_KIS_RESPONSE');return doc.data;
+}
+// KIS /payers has been observed to emit .14 numbers. Repair only numeric
+// tokens outside JSON strings; JSON.parse still rejects all other invalid syntax.
+function normalizeKisNumbers(raw) {
+  return raw.replace(/"(?:[^"\\]|\\[\s\S])*"|([:\[,]\s*)(-?)\.(\d+)/g,
+    (whole,prefix,sign,digits)=>prefix===undefined?whole:prefix+sign+'0.'+digits);
+}
+function buyerCandidates(app,m) {
+  const list=kis('/payers');
+  if(!Array.isArray(list)||list.length>10000)fail(502,'INVALID_KIS_LIST');
+  const registered=rows(app,'payers',''),ids=new Set(),codes=new Set(),result=[];
+  for(const x of list) {
+    if(!x||!id(x.id)||ids.has(x.id)||typeof x.kod!=='string'||!x.kod.trim()||codes.has(x.kod)||typeof x.name!=='string'||!x.name.trim())fail(502,'INVALID_KIS_LIST');
+    ids.add(x.id);codes.add(x.kod);
+    if(!registered.some(p=>p.get('id_pay')===x.id||p.get('kod_pay')===x.kod))
+      result.push({id:x.id,code:x.kod,name:x.name,address:typeof x.adres==='string'?x.adres:''});
+  }
+  return result;
 }
 function candidates(a) {
   const list=kis('/payers/'+a.record.get('id_pay')+'/clients');
@@ -119,7 +137,7 @@ function state(app,uid) {
   const now=manager(app,uid);
   const signature=x=>JSON.stringify(Array.from(x.map,([pid,a])=>[pid,a.all,Array.from(a.ids).sort(),a.record.get('id_pay'),a.record.get('active')]).sort());
   if(signature(m)!==signature(now))fail(403,'ACCESS_CHANGED');
-  return {version:'0.4.0',manager:{name:m.user.get('name')},payers,users:Array.from(users.values())};
+  return {version:'0.5.0',manager:{name:m.user.get('name')},payers,users:Array.from(users.values())};
 }
 function mutate(e,b) {
   const uid=e.auth.id, app=e.app, m=manager(app,uid);
@@ -138,7 +156,8 @@ function mutate(e,b) {
   }
   if(b.action==='create_payer'){
     if(!id(b.id_pay))fail(400,'INVALID_ID');
-    text(b.code,100);text(b.name,300);text(b.email,254);
+    const k=buyerCandidates(app,m).find(x=>x.id===b.id_pay);if(!k)fail(409,'PAYER_ALREADY_REGISTERED_OR_UNAVAILABLE');
+    b.code=k.code;b.name=k.name;text(b.code,100);text(b.name,300);text(b.email,254);
     if(!/^\S+@\S+\.\S+$/.test(b.email))fail(400,'INVALID_EMAIL');
     if(rows(app,'payers','id_pay = {:kid} || kod_pay = {:code}',{kid:b.id_pay,code:b.code}).length)fail(409,'PAYER_ALREADY_REGISTERED');
     // Onboard only a previously unmapped KIS buyer, never seize an existing PB record.
@@ -187,6 +206,11 @@ function route(e,kind) {
   try {
     if(!e.auth)fail(401,'AUTH_REQUIRED');
     if(kind==='state'){if(e.request.url.rawQuery)fail(400,'INVALID_PARAMETERS');return e.json(200,state(e.app,e.auth.id));}
+    if(kind==='buyers') {
+      if(e.request.url.rawQuery)fail(400,'INVALID_PARAMETERS');
+      const m=manager(e.app,e.auth.id),list=buyerCandidates(e.app,m);manager(e.app,e.auth.id);
+      return e.json(200,{buyers:list});
+    }
     if(kind==='clients') {
       const q=/^payer=([a-z0-9]{15})$/.exec(e.request.url.rawQuery||'');if(!q)fail(400,'INVALID_PARAMETERS');
       const m=manager(e.app,e.auth.id),a=area(m,q[1],false,true), list=candidates(a),now=area(manager(e.app,e.auth.id),q[1],false,true);
