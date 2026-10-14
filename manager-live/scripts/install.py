@@ -64,7 +64,7 @@ def main():
     if e.code!=401:raise RuntimeError('Smoke failed: '+path+' '+str(e.code))
     json.loads(e.read())
   with urllib.request.urlopen('http://127.0.0.1:8090/manager/',timeout=5) as r:
-   if b'0.7.0' not in r.read():raise RuntimeError('Manager HTML check failed')
+   if b'0.7.1' not in r.read():raise RuntimeError('Manager HTML check failed')
   con=sqlite3.connect('file:'+str(db)+'?mode=ro',uri=True)
   fields=json.loads(con.execute("SELECT fields FROM _collections WHERE name='users'").fetchone()[0]);con.close()
   if not any(f['name']=='manager_owner' and f['type']=='relation' for f in fields):raise RuntimeError('Ownership migration was not applied')
@@ -72,7 +72,7 @@ def main():
    if sha(root/'pb_hooks'/name) not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Gateway changed unexpectedly')
   print('AUTO_DIRECTORY_INSTALLED: http://192.168.25.98:8090/manager/')
   print('BACKUP:',backup)
-  print('Manager 0.7.0 installed; client and gateway preserved; users.manager_owner added.')
+  print('Manager 0.7.1 installed; client and gateway preserved; users.manager_owner added.')
  except Exception:
   run('systemctl','stop','pocketbase')
   for name in copied:

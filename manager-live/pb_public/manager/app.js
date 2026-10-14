@@ -1,16 +1,33 @@
 'use strict';
 const $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let token=sessionStorage.getItem('karavay.manager.token')||'', state=null,tab='users',buyer='', clients=[],generation=0,formAction='',editing=null,baseline='',busy=false,kisBuyers=[],editorGeneration=0,directory=[],directoryError='',directoryLoading=false,directoryGeneration=0,assignmentPayers=[];
+const TOKEN_KEY='karavay.manager.token',LOGOUT_KEY='karavay.manager.logout';
+function stored(area,key){try{return window[area].getItem(key)||'';}catch(_){return '';}}
+function removeStored(area,key){try{window[area].removeItem(key);}catch(_){}}
+let remembered=!!stored('localStorage',TOKEN_KEY),token=stored('localStorage',TOKEN_KEY)||stored('sessionStorage',TOKEN_KEY),authGeneration=0,refreshBusy=false, state=null,tab='users',buyer='', clients=[],generation=0,formAction='',editing=null,baseline='',busy=false,kisBuyers=[],editorGeneration=0,directory=[],directoryError='',directoryLoading=false,directoryGeneration=0,assignmentPayers=[];
+function saveSession(value,remember){
+ token=value;remembered=remember;removeStored(remember?'sessionStorage':'localStorage',TOKEN_KEY);
+ try{window[remember?'localStorage':'sessionStorage'].setItem(TOKEN_KEY,token);}catch(_){remembered=false;removeStored('localStorage',TOKEN_KEY);try{sessionStorage.setItem(TOKEN_KEY,token);}catch(_){}notify('Браузер не разрешил сохранить вход. Он действует в текущей вкладке.');}
+}
 const errors={PAYER_ALREADY_REGISTERED_OR_UNAVAILABLE:'Покупатель уже подключён или недоступен. Обновите список.',INVALID_RIGHT:'Проверьте выбранных покупателей и получателей.',MANAGER_REQUIRED:'Доступ разрешён только активному менеджеру.',ACCESS_DENIED:'Нет доступа к этой записи.',SHARED_ACCOUNT:'У пользователя есть доступы вне вашей области. Изменение выполняет администратор.',PAYER_ALREADY_REGISTERED:'Этот покупатель уже подключён. Назначение доступа выполняет администратор.',CLIENT_UNAVAILABLE:'Получатель недоступен или отключён в КИС.',MAIL_UNAVAILABLE:'Не удалось передать письмо. Проверьте SMTP на сервере.',SAVE_FAILED:'Запись не сохранена. Проверьте поля и уникальность email, логина и кодов.',KIS_UNAVAILABLE:'КИС недоступна. Повторите позже.',PAYER_NOT_VERIFIED:'КИС не подтвердила покупателя с действующим получателем.',ROLE_UNAVAILABLE:'Роль не настроена или отключена.',INVALID_USER:'Проверьте логин, email и роль.',PASSWORD_TOO_SHORT:'Пароль должен содержать не меньше 12 символов.'};
 function notify(s){$('#message').textContent=s;$('#message').hidden=false;setTimeout(()=>$('#message').hidden=true,8000);}
 async function api(path,body,auth=true){
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),45000);
- try{const res=await fetch(path,{method:body?'POST':'GET',headers:{...(auth&&token?{Authorization:token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:controller.signal,cache:'no-store'});
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),45000),requestToken=token;
+ try{const res=await fetch(path,{method:body?'POST':'GET',headers:{...(auth&&requestToken?{Authorization:requestToken}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:controller.signal,cache:'no-store'});
  let data;try{data=await res.json();}catch(_){throw Error('Сервер вернул некорректный ответ.');}
- if(!res.ok){if(res.status===401&&auth)logout();throw Error(errors[data.code]||('Запрос отклонён ('+res.status+'). '+(data.code||'Проверьте введённые данные.')));}return data;
+ if(!res.ok){if(auth&&requestToken===token&&(res.status===401||(res.status===403&&path==='/service/manager/state')||([400,403].includes(res.status)&&path==='/api/collections/users/auth-refresh')))logout();throw Error(errors[data.code]||('Запрос отклонён ('+res.status+'). '+(data.code||'Проверьте введённые данные.')));}return data;
  }catch(e){if(e.name==='AbortError')throw Error('Время ожидания истекло. Перед повтором обновите списки: действие могло выполниться.');throw e;}finally{clearTimeout(timer);}
 }
-function logout(){generation++;directoryGeneration++;directory=[];directoryError='';directoryLoading=false;token='';state=null;clients=[];buyer='';sessionStorage.removeItem('karavay.manager.token');$('#workspace').hidden=true;$('#login').hidden=false;if($('#dialog').open)$('#dialog').close();$('#content').replaceChildren();$('#login-form').reset();}
+function logout(broadcast=true){authGeneration++;generation++;directoryGeneration++;editorGeneration++;directory=[];directoryError='';directoryLoading=false;token='';remembered=false;state=null;clients=[];buyer='';removeStored('sessionStorage',TOKEN_KEY);if(broadcast){removeStored('localStorage',TOKEN_KEY);try{localStorage.setItem(LOGOUT_KEY,String(Date.now())+'-'+Math.random());}catch(_){}}$('#workspace').hidden=true;$('#login').hidden=false;$('#retry-session').hidden=true;if($('#dialog').open)$('#dialog').close();$('#fields').replaceChildren();$('#content').replaceChildren();$('#login-form').reset();}
+async function enterAccount(record){
+ if(record.must_change_password){open('password','Смена временного пароля',field('oldPassword','Временный пароль','password','','required autocomplete="current-password"')+field('password','Новый пароль','password','','required minlength="12" autocomplete="new-password"'));}
+ else await load();
+}
+async function restoreSession(){
+ if(!token||refreshBusy)return;refreshBusy=true;const g=authGeneration;$('#retry-session').hidden=true;
+ try{const data=await api('/api/collections/users/auth-refresh',{});if(g!==authGeneration||!token)return;saveSession(data.token,remembered);await enterAccount(data.record);}
+ catch(e){if(g===authGeneration||!token){notify(e.message);$('#retry-session').hidden=!token;}}
+ finally{refreshBusy=false;}
+}
 async function load(){const g=++generation;const data=await api('/service/manager/state');if(g!==generation)return;state=data;if(!state.payers.some(p=>p.id===buyer))buyer=state.payers[0]?.id||'';$('#who').textContent=state.manager.name;$('#login').hidden=true;$('#workspace').hidden=false;render();loadDirectory();}
 async function loadDirectory(){const seq=++directoryGeneration,session=token;directory=[];directoryError='';directoryLoading=true;render();try{const data=await api('/service/manager/directory');if(seq!==directoryGeneration||session!==token)return;directory=data.buyers;}catch(e){if(seq===directoryGeneration&&session===token)directoryError=e.message;}finally{if(seq===directoryGeneration&&session===token){directoryLoading=false;render();}}}
 function field(name,label,type='text',value='',extra=''){return `<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" ${extra}></label>`;}
@@ -73,8 +90,8 @@ async function loadAssignmentClients(r){
  }catch(e){if(gen===editorGeneration&&r.isConnected&&Number(r.dataset.request)===seq)hint.textContent=e.message;}
  finally{if(gen===editorGeneration&&r.isConnected&&Number(r.dataset.request)===seq)b.disabled=false;}
 }
-$('#login-form').addEventListener('submit',async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;try{const f=new FormData(e.target),data=await api('/api/collections/users/auth-with-password',Object.fromEntries(f),false);token=data.token;sessionStorage.setItem('karavay.manager.token',token);e.target.reset();if(data.record.must_change_password){open('password','Смена временного пароля',field('oldPassword','Временный пароль','password','','required autocomplete="current-password"')+field('password','Новый пароль','password','','required minlength="12" autocomplete="new-password"'));}else await load();}catch(err){notify(err.message);}finally{button.disabled=false;}});
-$('#logout').onclick=logout;$('#refresh').onclick=()=>load().then(()=>tab==='clients'?loadClients():null).catch(e=>notify(e.message));$('#search').oninput=render;
+$('#login-form').addEventListener('submit',async e=>{e.preventDefault();const button=e.submitter||$('#login-form button[type=submit]'),g=++authGeneration;button.disabled=true;try{const f=new FormData(e.target),remember=e.target.elements.remember.checked,data=await api('/api/collections/users/auth-with-password',{identity:f.get('identity'),password:f.get('password')},false);if(g!==authGeneration)return;saveSession(data.token,remember);e.target.reset();$('#retry-session').hidden=true;await enterAccount(data.record);}catch(err){if(g===authGeneration||!token)notify(err.message);}finally{button.disabled=false;}});
+$('#logout').onclick=()=>logout();$('#retry-session').onclick=restoreSession;$('#refresh').onclick=()=>load().then(()=>tab==='clients'?loadClients():null).catch(e=>notify(e.message));$('#search').oninput=render;
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{generation++;tab=b.dataset.tab;render();if(tab==='clients')loadClients();});
 $('#create').onclick=async()=>{if(tab==='payers'){open('create_payer','Добавить покупателя',payerForm());loadBuyers();}else if(tab==='users'){try{await load();}catch(e){notify(e.message);return;}open('create_user','Добавить пользователя',userForm()+field('password','Временный пароль','password','','required minlength="12" autocomplete="new-password"')+'<p class="hint">После создания откроется окно выбора покупателей и получателей. При первом входе пользователь сменит временный пароль.</p>');}else loadClients();};
 $('#content').addEventListener('change',e=>{if(e.target.id==='buyer'){buyer=e.target.value;loadClients();}});
@@ -107,4 +124,5 @@ $('#editor').addEventListener('submit',async e=>{e.preventDefault();if(busy)retu
  const saved=await api('/service/manager/action',data),created=formAction==='create_user';$('#dialog').close();e.target.reset();notify(created?'Пользователь создан. Теперь назначьте покупателей и получателей.':'Изменения сохранены.');await load();if(created)await openAssignments(state.users.find(u=>u.id===saved.id)||{id:saved.id,name:data.name,rights:[]},true);
  }catch(err){if($('#dialog').open)$('#form-error').textContent=err.message;else notify(err.message);}finally{busy=false;$('#save').disabled=formAction==='set_rights'&&!$('#rights-list');}});
 window.addEventListener('beforeunload',e=>{if($('#dialog').open&&snapshot()!==baseline){e.preventDefault();e.returnValue='';}});
-if(token)api('/api/collections/users/auth-refresh',{}).then(d=>{token=d.token;sessionStorage.setItem('karavay.manager.token',token);return load();}).catch(e=>{logout();notify(e.message);});
+window.addEventListener('storage',e=>{if(e.key===LOGOUT_KEY||(remembered&&e.key===TOKEN_KEY&&!e.newValue))logout(false);});
+if(token)restoreSession();
