@@ -138,7 +138,7 @@ function state(app,uid) {
   const now=manager(app,uid);
   const signature=x=>JSON.stringify(Array.from(x.map,([pid,a])=>[pid,a.all,Array.from(a.ids).sort(),a.record.get('id_pay'),a.record.get('active')]).sort());
   if(signature(m)!==signature(now))fail(403,'ACCESS_CHANGED');
-  return {version:'0.6.1',manager:{name:m.user.get('name')},payers,users:Array.from(users.values())};
+  return {version:'0.6.2',manager:{id:uid,name:m.user.get('name')},payers,users:Array.from(users.values())};
 }
 function mutate(e,b) {
   const uid=e.auth.id, app=e.app, m=manager(app,uid);
