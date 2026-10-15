@@ -109,14 +109,68 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             request('/api/collections/payers/records/'+p2,token=admin,method='DELETE',expected=204)
             # Provisioning is exercised against the real local PB; only KIS is stubbed.
             spec=importlib.util.spec_from_file_location('seed',ROOT/'scripts/Seed-Demo-Users.py');seed=importlib.util.module_from_spec(spec);spec.loader.exec_module(seed);seed.PB=BASE;original=seed.Api.call
+            seed.STATE=d/'demo-plan.json'
+            # Test fixtures are deliberately NOT the two earlier KIS examples.
+            buyers=[{'id':300182,'name':'ПРОМТЕХСБЫТ'}, {'id':299271,'name':'НЕВА-М'},
+                    {'id':700001,'name':'ООО ПРОМТЕХСБЫТ филиал'},
+                    {'id':700050,'kod':'FIX0','name':'Inactive fixture','state':0},
+                    {'id':700101,'kod':'FIX1','name':'Fixture buyer one','state':1},
+                    {'id':700201,'kod':'FIX2','name':'Fixture buyer two','state':1}]
+            points={700101:[{'id':700102,'payer_id':700101,'kod':'FIX100','name':'Fixture point one','state':1}],
+                    700201:[{'id':700202,'payer_id':700201,'kod':'FIX200','name':'Fixture point two','state':1},
+                            {'id':700203,'payer_id':700201,'kod':'FIX201','name':'Fixture point three','state':1}]}
+            calls=[];interrupt=[False]
             def stub(self,path,body=None,method=None,kis=False):
-                if kis:return json.loads(subprocess.check_output([str(d/'bin/curl'),'--url','http://stub/api/v1'+path]).decode().split('\n__KIS_HTTP__')[0])['data']
+                calls.append((kis,path,method))
+                if kis:
+                    assert body is None and method in (None,'GET')
+                    assert path not in ['/payers/300182','/payers/299271','/payers/700001']
+                    if path=='/payers':return buyers
+                    parts=path.strip('/').split('/');num=int(parts[1])
+                    if parts[0]=='payers':return points.get(num,[]) if len(parts)==3 else next(v for v in buyers if v['id']==num)
+                    if parts[0]=='clients':return next(p for group in points.values() for p in group if p['id']==num)
+                    raise AssertionError(path)
+                if interrupt[0] and path=='/api/collections/rights/records' and method=='POST':
+                    interrupt[0]=False
+                    raise seed.Failure('Simulated lost connection before grant')
                 return original(self,path,body,method,False)
             seed.Api.call=stub
             import unittest.mock as mock
-            for _ in range(2):
-                with mock.patch.object(sys.stdin,'isatty',return_value=True),mock.patch('builtins.input',return_value='admin@example.test'),mock.patch.object(seed.getpass,'getpass',return_value=pw),mock.patch.object(sys,'argv',['seed','--apply']):seed.main()
-            demos=[v for v in request('/api/collections/users/records?perPage=200',token=admin)['items'] if '(демо)' in v['name']];assert len(demos)==2 and all(v['active'] and v['must_change_password'] for v in demos)
+            api=seed.Api();api.token=admin
+            seed.run(api,False)
+            assert not seed.STATE.exists() and not any(method in ('POST','PATCH','DELETE') for _,_,method in calls)
+            full=buyers[:];buyers[:]=buyers[:3]
+            try:seed.run(api,True);raise AssertionError('Excluded buyers selected')
+            except seed.Failure:pass
+            buyers[:]=full
+            # Partly provisioned accounts remain inactive and can resume the exact saved plan.
+            interrupt[0]=True
+            with mock.patch.object(seed.getpass,'getpass',return_value=pw):
+                try:seed.run(api,True);raise AssertionError('Expected interrupted provisioning')
+                except seed.Failure:pass
+            plan=json.loads(seed.STATE.read_text());assert plan['payers']==[700201,700101] and plan['client']==700202
+            first=request('/api/collections/users/records/'+plan['users'][0]['id'],token=admin)
+            assert first['active'] is False and not plan['users'][0]['done']
+            with mock.patch.object(seed.getpass,'getpass',return_value=pw):seed.run(api,True)
+            plan=json.loads(seed.STATE.read_text());assert all(v['done'] for v in plan['users'])
+            snapshot=lambda:{col:request('/api/collections/'+col+'/records?perPage=200',token=admin)['items'] for col in ('users','payers','clients','rights')}
+            before=snapshot()
+            with mock.patch.object(seed.getpass,'getpass',side_effect=AssertionError('Rerun must not ask/reset passwords')):seed.run(api,True)
+            assert snapshot()==before and pw not in seed.STATE.read_text()
+            demos=[v for v in before['users'] if '(демо)' in v['name']];assert len(demos)==2 and all(v['active'] and v['must_change_password'] for v in demos)
+            multi=next(v for v in demos if v['email']==seed.ACCOUNTS[0]['email']);point=next(v for v in demos if v['email']==seed.ACCOUNTS[1]['email'])
+            multi_rights=[v for v in before['rights'] if v['user']==multi['id']];point_rights=[v for v in before['rights'] if v['user']==point['id']]
+            assert len(multi_rights)==2 and all(v['scope']=='all' and v['kis_client_id']==0 for v in multi_rights)
+            assert len(point_rights)==1 and point_rights[0]['scope']=='client' and point_rights[0]['kis_client_id']==700202 and point_rights[0]['client']
+            mapped={p['id']:p['id_pay'] for p in before['payers']}
+            assert {mapped[r['payer']] for r in multi_rights}=={700101,700201}
+            request('/api/collections/users/auth-with-password',{'identity':seed.ACCOUNTS[0]['email'],'password':pw})
+            # Do not turn on an account disabled after successful provisioning.
+            request('/api/collections/users/records/'+point['id'],{'active':False},admin,'PATCH')
+            before=snapshot()
+            try:seed.run(api,True);raise AssertionError('Disabled account reactivated')
+            except seed.Failure:pass
+            assert snapshot()==before
             print('PASS: actual PB 0.40.3 + stub KIS: details/list, rights/role isolation, exact POST, prices/minimums, idempotency/restart-persistent journal, concurrency, timeout/rejection, demo accounts')
         except Exception:
             log.flush();log.seek(0);print(log.read()[-6000:]);raise
