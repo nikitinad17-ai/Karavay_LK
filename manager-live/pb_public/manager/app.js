@@ -1,6 +1,8 @@
 'use strict';
 const $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const TOKEN_KEY='karavay.manager.token',LOGOUT_KEY='karavay.manager.logout';
+const recipientDetails=new Map();
+let userRole='';
 function stored(area,key){try{return window[area].getItem(key)||'';}catch(_){return '';}}
 function removeStored(area,key){try{window[area].removeItem(key);}catch(_){}}
 let remembered=!!stored('localStorage',TOKEN_KEY),token=stored('localStorage',TOKEN_KEY)||stored('sessionStorage',TOKEN_KEY),authGeneration=0,refreshBusy=false, state=null,tab='users',buyer='', clients=[],generation=0,formAction='',editing=null,baseline='',busy=false,kisBuyers=[],editorGeneration=0,directory=[],directoryError='',directoryLoading=false,directoryGeneration=0,assignmentPayers=[];
@@ -17,7 +19,7 @@ async function api(path,body,auth=true){
  if(!res.ok){if(auth&&requestToken===token&&(res.status===401||(res.status===403&&path==='/service/manager/state')||([400,403].includes(res.status)&&path==='/api/collections/users/auth-refresh')))logout();throw Error(errors[data.code]||('Запрос отклонён ('+res.status+'). '+(data.code||'Проверьте введённые данные.')));}return data;
  }catch(e){if(e.name==='AbortError')throw Error('Время ожидания истекло. Перед повтором обновите списки: действие могло выполниться.');throw e;}finally{clearTimeout(timer);}
 }
-function logout(broadcast=true){authGeneration++;generation++;directoryGeneration++;editorGeneration++;directory=[];directoryError='';directoryLoading=false;token='';remembered=false;state=null;clients=[];buyer='';removeStored('sessionStorage',TOKEN_KEY);if(broadcast){removeStored('localStorage',TOKEN_KEY);try{localStorage.setItem(LOGOUT_KEY,String(Date.now())+'-'+Math.random());}catch(_){}}$('#workspace').hidden=true;$('#login').hidden=false;$('#retry-session').hidden=true;if($('#dialog').open)$('#dialog').close();$('#fields').replaceChildren();$('#content').replaceChildren();$('#login-form').reset();}
+function logout(broadcast=true){authGeneration++;generation++;directoryGeneration++;editorGeneration++;directory=[];directoryError='';directoryLoading=false;token='';remembered=false;state=null;clients=[];buyer='';recipientDetails.clear();userRole='';$('#search').value='';removeStored('sessionStorage',TOKEN_KEY);if(broadcast){removeStored('localStorage',TOKEN_KEY);try{localStorage.setItem(LOGOUT_KEY,String(Date.now())+'-'+Math.random());}catch(_){}}$('#workspace').hidden=true;$('#login').hidden=false;$('#retry-session').hidden=true;if($('#dialog').open)$('#dialog').close();$('#fields').replaceChildren();document.querySelector('.toolbar').appendChild($('#create'));$('#content').replaceChildren();$('#login-form').reset();}
 async function enterAccount(record){
  if(record.must_change_password){open('password','Смена временного пароля',field('oldPassword','Временный пароль','password','','required autocomplete="current-password"')+field('password','Новый пароль','password','','required minlength="12" autocomplete="new-password"'));}
  else await load();
@@ -28,16 +30,57 @@ async function restoreSession(){
  catch(e){if(g===authGeneration||!token){notify(e.message);$('#retry-session').hidden=!token;}}
  finally{refreshBusy=false;}
 }
-async function load(){const g=++generation;const data=await api('/service/manager/state');if(g!==generation)return;state=data;if(!state.payers.some(p=>p.id===buyer))buyer=state.payers[0]?.id||'';$('#who').textContent=state.manager.name;$('#login').hidden=true;$('#workspace').hidden=false;render();loadDirectory();}
+async function load(){const g=++generation;const data=await api('/service/manager/state');if(g!==generation)return;state=data;recipientDetails.clear();if(!state.payers.some(p=>p.id===buyer))buyer=state.payers[0]?.id||'';$('#who').textContent=state.manager.name;$('#login').hidden=true;$('#workspace').hidden=false;render();loadDirectory();}
 async function loadDirectory(){const seq=++directoryGeneration,session=token;directory=[];directoryError='';directoryLoading=true;render();try{const data=await api('/service/manager/directory');if(seq!==directoryGeneration||session!==token)return;directory=data.buyers;}catch(e){if(seq===directoryGeneration&&session===token)directoryError=e.message;}finally{if(seq===directoryGeneration&&session===token){directoryLoading=false;render();}}}
 function field(name,label,type='text',value='',extra=''){return `<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" ${extra}></label>`;}
 function status(active){return `<span class="status ${active?'':'off'}">${active?'Активен':'Отключён'}</span>`;}
+function roleName(u){return u.role_code==='owner'?'Покупатель':u.role_code==='viewer'?'Только просмотр':'Роль недоступна';}
+function userGroups(u){
+ const groups=new Map();
+ for(const r of u.rights.filter(r=>r.active)){if(!groups.has(r.payer))groups.set(r.payer,{payer:state.payers.find(p=>p.id===r.payer),rights:[]});groups.get(r.payer).rights.push(r);}
+ return [...groups.values()];
+}
+function buyerSummary(u){return userGroups(u).map(g=>g.payer?`<div class="assignment-name"><span class="entity-code">${esc(g.payer.code)}</span> · ${esc(g.payer.name)}</div>`:'<span class="muted">Покупатель недоступен</span>').join('')||'<span class="muted">—</span>';}
+function recipientSummary(u,controls=true){
+ const groups=userGroups(u);let needsDetails=false,loading=false;
+ const html=groups.map(g=>{
+  if(g.rights.some(r=>r.scope==='all'))return `<div class="assignment-name">Все получатели${g.payer?` <small>· ${esc(g.payer.code)}</small>`:''}</div>`;
+  const detail=g.payer&&recipientDetails.get(g.payer.id);loading=loading||detail?.loading;
+  const recipients=[...new Set(g.rights.map(r=>r.kis_client_id))].map(id=>{
+   const c=detail?.clients?.find(c=>c.id===id);if(c)return `<div class="assignment-name"><span class="entity-code">${esc(c.code)}</span> · ${esc(c.name)}</div>`;
+   if(g.payer&&!detail?.clients)needsDetails=true;
+   return `<div class="assignment-name muted">КИС ID ${esc(id)}${detail?.clients?' · нет в текущей выдаче':''}</div>`;
+  }).join('');
+  return recipients+(detail?.error?`<small class="unavailable">${esc(detail.error)}</small>`:'');
+ }).join('')||'<span class="muted">—</span>';
+ return html+(controls&&needsDetails?`<button class="recipient-details" data-recipients="${u.id}" ${loading?'disabled':''}>${loading?'Загружаем…':'Показать коды и названия'}</button>`:'');
+}
+function userStatus(u){return !u.active?status(false):!u.rights.some(r=>r.active)?'<span class="pending-badge">Ожидает назначения</span>':status(true);}
+function renderUsers(matches){
+ const selected=state.users.filter(u=>(!userRole||u.role_code===userRole)&&matches({user:u,buyers:userGroups(u).map(g=>g.payer),recipients:userGroups(u).flatMap(g=>recipientDetails.get(g.payer?.id)?.clients?.filter(c=>g.rights.some(r=>r.scope==='all'||r.kis_client_id===c.id))||[])}));
+ return `<div class="users-panel"><div class="list-caption"><strong>Пользователи <span>· ${selected.length}${selected.length!==state.users.length?' из '+state.users.length:''}</span></strong></div><div class="user-table-wrap"><table class="user-list"><caption class="sr-only">Пользователи и назначенные им покупатели и получатели</caption><thead><tr class="user-head"><th scope="col">Логин / имя</th><th scope="col">Email</th><th scope="col">Роль</th><th scope="col">Статус</th><th scope="col">Покупатели (код)</th><th scope="col">Получатели (код)</th><th scope="col">Действия</th></tr></thead><tbody>${selected.map(u=>`<tr class="user-line"><td data-label="Логин / имя"><div class="user-identity"><strong>${esc(u.login)}</strong><small>${esc(u.name)}</small></div></td><td data-label="Email"><span class="contact-email">${esc(u.email)}</span></td><td data-label="Роль"><span class="role-badge ${u.role_code==='viewer'?'viewer':''}">${esc(roleName(u))}</span></td><td data-label="Статус">${userStatus(u)}${u.must_change_password?'<small class="first-login">Смена пароля при входе</small>':''}</td><td data-label="Покупатели (код)">${buyerSummary(u)}</td><td data-label="Получатели (код)">${recipientSummary(u)}</td><td data-label="Действия"><div class="user-actions"><button data-info="${u.id}">Инфо</button>${u.editable?`<button data-edit-user="${u.id}">Изменить</button><button class="${u.active?'danger-button':'enable-button'}" data-toggle="${u.id}">${u.active?'Отключить':'Включить'}</button><button class="access-button" data-rights="${u.id}">${u.rights.some(r=>r.active)?'Покупатели и получатели':'Назначить доступ'}</button><button class="reset-button" data-reset="${u.id}" ${u.active?'':'disabled'}>Сбросить пароль</button>`:'<small>Изменяет администратор</small>'}</div></td></tr>`).join('')}</tbody></table></div></div>`;
+}
+async function showRecipientDetails(uid){
+ const u=state?.users.find(u=>u.id===uid);if(!u)return;
+ const session=token,context=state,payers=userGroups(u).filter(g=>g.payer&&!g.rights.some(r=>r.scope==='all')).map(g=>g.payer).filter(p=>!recipientDetails.get(p.id)?.clients&&!recipientDetails.get(p.id)?.loading);
+ await Promise.all(payers.map(async p=>{
+  recipientDetails.set(p.id,{loading:true});render();
+  try{const data=await api('/service/manager/clients?payer='+encodeURIComponent(p.id));if(session!==token||context!==state)return;recipientDetails.set(p.id,{clients:data.clients});}
+  catch(e){if(session===token&&context===state)recipientDetails.set(p.id,{error:e.message});}
+  finally{if(session===token&&context===state)render();}
+ }));
+}
+function showUserInfo(u){
+ open('info','Информация о пользователе',`<dl class="user-info"><dt>Имя</dt><dd>${esc(u.name)}</dd><dt>Логин</dt><dd>${esc(u.login)}</dd><dt>Email</dt><dd>${esc(u.email)}</dd><dt>Роль</dt><dd>${esc(roleName(u))}</dd><dt>Статус</dt><dd>${userStatus(u)}</dd><dt>Покупатели</dt><dd>${buyerSummary(u)}</dd><dt>Получатели</dt><dd>${recipientSummary(u,false)}</dd></dl>`,u);
+}
 function render(){
- if(!state)return;const titles={payers:'Покупатели',users:'Пользователи',clients:'Получатели'};$('#title').textContent=titles[tab];$('#create').textContent=tab==='payers'?'Добавить покупателя':tab==='users'?'Добавить пользователя':'Обновить получателей';$('#create').disabled=tab==='clients'&&!buyer;
+ if(!state)return;document.querySelector('.toolbar').appendChild($('#create'));const titles={payers:'Покупатели',users:'Пользователи',clients:'Получатели'};$('#title').textContent=titles[tab];$('#create').textContent=tab==='payers'?'Добавить покупателя':tab==='users'?'+ Создать пользователя':'Обновить получателей';$('#create').disabled=tab==='clients'&&!buyer;
+ $('#users-notice').hidden=tab!=='users';$('#user-filter').hidden=tab!=='users';document.querySelector('main').classList.toggle('users-view',tab==='users');
+ $('#role-filter').innerHTML=[['','Все роли'],['owner','Покупатель'],['viewer','Только просмотр']].map(([code,name])=>`<option value="${code}" ${code===userRole?'selected':''}>${name} · ${state.users.filter(u=>!code||u.role_code===code).length}</option>`).join('');
  document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===tab));
  const search=$('#search').value.toLocaleLowerCase('ru'),matches=o=>JSON.stringify(o).toLocaleLowerCase('ru').includes(search);
  if(tab==='payers')$('#content').innerHTML=`<div class="list-caption"><strong>Покупатели <span>${directory.length}</span></strong><span>Справочник КИС</span></div>${directoryLoading?'<p role="status">Загружаем покупателей…</p>':''}${directoryError?`<p role="alert">${esc(directoryError)}</p><button id="retry-directory">Повторить загрузку</button>`:''}<ul class="buyer-list">${directory.filter(matches).map(p=>{const local=state.payers.find(x=>x.id_pay===p.id&&x.code===p.code);return `<li class="buyer-line"><span class="buyer-code">${esc(p.code)}</span><div class="buyer-info"><strong>${esc(p.name)}</strong>${local?.email?`<span class="contact-email">${esc(local.email)}</span>`:''}</div><div class="buyer-actions">${local?`<button data-clients="${local.id}">Получатели</button>${local.access==='all'?`<button data-edit-payer="${local.id}">Изменить</button>`:''}`:p.connection==='available'?'<small>Доступен для назначения</small>':'<small>Доступ назначает администратор</small>'}</div></li>`;}).join('')}</ul>`;
- if(tab==='users')$('#content').innerHTML=`<div class="list-caption"><strong>Пользователи <span>${state.users.length}</span></strong></div><div class="user-list"><div class="user-head"><span>Пользователь / email</span><span>Роль</span><span>Покупатели / получатели</span><span></span></div>${state.users.filter(matches).map(u=>{const active=u.rights.filter(r=>r.active),codes=[...new Set(active.map(r=>state.payers.find(p=>p.id===r.payer)?.code||''))].filter(Boolean);return `<article class="user-line"><div class="user-identity"><strong>${esc(u.name)}</strong><span class="contact-email">${esc(u.email)}</span><small>${esc(u.login)}</small></div><div class="user-role"><span class="role-badge">${u.role_code==='owner'?'Покупатель':'Только просмотр'}</span>${!u.active?'<span class="status off">Отключён</span>':''}</div><div class="user-access">${codes.length?`<strong>${esc(codes.join(', '))}</strong><small>${active.some(r=>r.scope==='all')?'Есть доступ ко всем получателям':'Выбранных получателей: '+active.length}</small>`:'<span class="pending-badge">Ожидает назначения</span>'}${u.must_change_password?'<small>Первый вход: смена пароля</small>':''}</div><div class="user-actions">${u.editable?`<button class="access-button" data-rights="${u.id}">${active.length?'Покупатели и получатели':'Назначить доступ'}</button><details><summary aria-label="Действия пользователя">⋯</summary><div><button data-edit-user="${u.id}">Изменить данные</button><button data-toggle="${u.id}">${u.active?'Отключить':'Включить'}</button><button data-reset="${u.id}" ${u.active?'':'disabled'}>Сбросить пароль</button></div></details>`:'<small>Изменяет администратор</small>'}</div></article>`;}).join('')}</div>`;
+ if(tab==='users'){$('#content').innerHTML=renderUsers(matches);document.querySelector('.users-panel .list-caption').appendChild($('#create'));}
 
  if(tab==='clients')$('#content').innerHTML=`<label>Покупатель<select id="buyer">${state.payers.map(p=>`<option value="${p.id}" ${p.id===buyer?'selected':''}>${esc(p.name)}${p.active?'':' · отключён'}</option>`).join('')}</select></label><p class="hint">Получатели загружаются из КИС. Доступ пользователю назначается в разделе «Пользователи».</p><div class="grid">${clients.filter(matches).map(c=>`<article class="card"><small>КИС ID ${c.id} · ${esc(c.code)}</small><h3>${esc(c.name)}</h3><p>${esc(c.address)}</p></article>`).join('')}</div>`;
  if(!$('#content').querySelector('.card,.buyer-line,.user-line')&&tab!=='clients'&&!(tab==='payers'&&(directoryLoading||directoryError)))$('#content').insertAdjacentHTML('beforeend','<div class="empty">Нет записей для выбранных условий</div>');
@@ -45,7 +88,7 @@ function render(){
 async function loadClients(){const g=++generation,selected=buyer;clients=[];render();if(!buyer)return;try{const data=await api('/service/manager/clients?payer='+encodeURIComponent(buyer));if(g!==generation||selected!==buyer||tab!=='clients')return;clients=data.clients;render();if(!clients.length)notify('Получатели не найдены.');}catch(e){if(g===generation)notify(e.message);}}
 function snapshot(){return JSON.stringify({fields:[...new FormData($('#editor')).entries()],rights:[...document.querySelectorAll('.assignment')].map(r=>[r.querySelector('.payer-check').checked,r.dataset.key,r.querySelector('.rs').value,[...r.querySelectorAll('.rc:checked')].map(c=>c.value)])});}
 function close(){if(busy)return;if(snapshot()!==baseline&&!confirm('Закрыть форму и отменить несохранённые изменения?'))return;$('#dialog').close();}
-function open(action,title,html,obj=null){editorGeneration++;formAction=action;editing=obj;$('#dialog-title').textContent=title;$('#fields').innerHTML=html;$('#form-error').textContent='';$('#save').textContent=action==='password'?'Сменить пароль':'Сохранить';$('#dialog').showModal();baseline=snapshot();}
+function open(action,title,html,obj=null){editorGeneration++;formAction=action;editing=obj;$('#dialog-title').textContent=title;$('#fields').innerHTML=html;$('#form-error').textContent='';$('#save').textContent=action==='password'?'Сменить пароль':'Сохранить';$('#save').hidden=action==='info';$('#cancel').textContent=action==='info'?'Закрыть':'Отмена';$('#dialog').showModal();baseline=snapshot();}
 function userForm(u={}){return field('name','Имя','text',u.name||'','required maxlength="200"')+field('email','Email','email',u.email||'','required autocomplete="off"')+field('login','Технический логин','text',u.login||'','required minlength="3" maxlength="100" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]*"')+`<label>Роль<select name="role_code"><option value="owner" ${u.role_code==='owner'?'selected':''}>Покупатель</option><option value="viewer" ${u.role_code==='viewer'?'selected':''}>Только просмотр</option></select></label>`;}
 function rightRow(p,rs=[]){
  const chosen=rs.length>0,all=rs.some(x=>x.scope==='all'),disabled=p.connection==='registered'||p.active===false;
@@ -92,11 +135,14 @@ async function loadAssignmentClients(r){
 }
 $('#login-form').addEventListener('submit',async e=>{e.preventDefault();const button=e.submitter||$('#login-form button[type=submit]'),g=++authGeneration;button.disabled=true;try{const f=new FormData(e.target),remember=e.target.elements.remember.checked,data=await api('/api/collections/users/auth-with-password',{identity:f.get('identity'),password:f.get('password')},false);if(g!==authGeneration)return;saveSession(data.token,remember);e.target.reset();$('#retry-session').hidden=true;await enterAccount(data.record);}catch(err){if(g===authGeneration||!token)notify(err.message);}finally{button.disabled=false;}});
 $('#logout').onclick=()=>logout();$('#retry-session').onclick=restoreSession;$('#refresh').onclick=()=>load().then(()=>tab==='clients'?loadClients():null).catch(e=>notify(e.message));$('#search').oninput=render;
+$('#role-filter').onchange=e=>{userRole=e.target.value;render();};
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{generation++;tab=b.dataset.tab;render();if(tab==='clients')loadClients();});
 $('#create').onclick=async()=>{if(tab==='payers'){open('create_payer','Добавить покупателя',payerForm());loadBuyers();}else if(tab==='users'){try{await load();}catch(e){notify(e.message);return;}open('create_user','Добавить пользователя',userForm()+field('password','Временный пароль','password','','required minlength="12" autocomplete="new-password"')+'<p class="hint">После создания откроется окно выбора покупателей и получателей. При первом входе пользователь сменит временный пароль.</p>');}else loadClients();};
 $('#content').addEventListener('change',e=>{if(e.target.id==='buyer'){buyer=e.target.value;loadClients();}});
 async function action(body){if(busy)return;busy=true;document.querySelectorAll('button').forEach(b=>b.disabled=true);try{await api('/service/manager/action',body);notify(body.action==='reset_password'?'Письмо передано почтовому сервису. Доставку нужно проверить.':'Изменения сохранены.');await load();if(tab==='clients')await loadClients();}catch(e){notify(e.message);}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);render();}}
 $('#content').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const d=b.dataset;
+ if(d.info){const u=state.users.find(u=>u.id===d.info);if(u)showUserInfo(u);}
+ if(d.recipients)showRecipientDetails(d.recipients);
  if(b.id==='retry-directory')loadDirectory();
  if(d.connectKis){open('create_payer','Подключить покупателя КИС',payerForm());loadBuyers(d.connectKis);}
  if(d.clients){buyer=d.clients;tab='clients';loadClients();}
@@ -116,7 +162,7 @@ $('#fields').addEventListener('change',e=>{
  if(e.target.classList.contains('rs'))r.querySelector('.recipient-options').hidden=e.target.value==='all';
 });
 $('#fields').addEventListener('click',e=>{const b=e.target.closest('button');if(b?.id==='retry-assignments'){fillAssignments();return;}if(b&&'candidates'in b.dataset)loadAssignmentClients(b.closest('.assignment'));});
-$('#editor').addEventListener('submit',async e=>{e.preventDefault();if(busy)return;busy=true;$('#save').disabled=true;$('#form-error').textContent='';try{const data=Object.fromEntries(new FormData(e.target));if(formAction==='password'){await api('/service/account/change-password',data);logout();notify('Пароль изменён. Войдите заново. Для кабинета клиента откройте основной адрес.');return;}
+$('#editor').addEventListener('submit',async e=>{e.preventDefault();if(busy||formAction==='info')return;busy=true;$('#save').disabled=true;$('#form-error').textContent='';try{const data=Object.fromEntries(new FormData(e.target));if(formAction==='password'){await api('/service/account/change-password',data);logout();notify('Пароль изменён. Войдите заново. Для кабинета клиента откройте основной адрес.');return;}
  if(formAction==='create_payer'){const selected=kisBuyers.find(p=>String(p.id)===$('#kis-buyer').value);if(!selected)throw Error('Выберите покупателя из КИС.');data.id_pay=selected.id;data.code=selected.code;data.name=selected.name;delete data['buyer-search'];}
  data.action=formAction;if(editing){data.user=editing.id;data.payer=editing.id;}if(data.id_pay)data.id_pay=Number(data.id_pay);if(formAction==='edit_payer')data.active=!!e.target.elements.active.checked;
  if(formAction==='set_rights'){data.rights=readRights();if(!data.rights.length&&editing.rights.some(r=>r.active)&&!confirm('Снять все назначения? Пользователь потеряет доступ к покупателям.'))return;}
