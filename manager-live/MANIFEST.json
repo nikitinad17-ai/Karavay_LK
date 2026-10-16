@@ -13,7 +13,10 @@
     "karavay-context.pb.js": "f72ef461d7b34d4e97f84c461b3d2ff9dd4f1c9402b2f7dfa1ea796270ff9d0f",
     "karavay-catalog.pb.js": "cd2a21fbc2346611eb3d62883964cc150b4730965fc57f914fe76fdf397a7516",
     "karavay-clients.pb.js": "c670f7eee3ab3cba316c83cca7a2d28ef438bfef601c5858f6cde9114abccdbc",
-    "karavay-orders.pb.js": "85fde8d50f1a979ee0a3491d0df2d86d89f7307c3b3743b3f4ca46d37b346561"
+    "karavay-orders.pb.js": [
+      "85fde8d50f1a979ee0a3491d0df2d86d89f7307c3b3743b3f4ca46d37b346561",
+      "7d600e8a8216f9ab5a84fffe790304ae1fbaadf1bf8324f9449392d7c69652d4"
+    ]
   },
   "required_fields": {
     "users": {
@@ -58,7 +61,7 @@
       "active": "bool"
     }
   },
-  "installer_sha256": "97307687cb010cead17b788f5c489cc2e7c6676d65c11f29d75e9edd655cc342",
+  "installer_sha256": "ccf59556d674772179eee74003ad8df8eb383c84062ae73c0dcf9ee9accea2b1",
   "previous": {
     "pb_hooks/karavay-manager.js": [
       "e98ed1ad9de272e5283b251d5c3a072f685293db2cc452b6c90fba97e2cf7b2e",

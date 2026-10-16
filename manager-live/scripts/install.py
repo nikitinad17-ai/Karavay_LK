@@ -9,7 +9,7 @@ def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def run(*args):return subprocess.run(args,check=True,capture_output=True,text=True)
 def main():
  parser=argparse.ArgumentParser();parser.add_argument('--install',action='store_true');parser.add_argument('--root',default='/opt/pocketbase');args=parser.parse_args()
- root=pathlib.Path(args.root).resolve();manifest=json.load(open(SOURCE/'MANIFEST.json'))
+ root=pathlib.Path(args.root).resolve();manifest=json.loads((SOURCE/'MANIFEST.json').read_text())
  for name,digest in manifest['package'].items():
   if sha(SOURCE/name)!=digest:raise RuntimeError('Package hash mismatch: '+name)
  for name,digest in manifest['gateway'].items():
@@ -20,7 +20,11 @@ def main():
  # Read definitions only. No data is read, exported or changed during preflight.
  import sqlite3
  con=sqlite3.connect('file:'+str(db)+'?mode=ro',uri=True)
- definitions=list(con.execute('SELECT id, name, fields FROM _collections'));defs={row[1]:json.loads(row[2]) for row in definitions};con.close()
+ definitions=list(con.execute('SELECT id, name, fields FROM _collections'));defs={row[1]:json.loads(row[2]) for row in definitions}
+ applied={row[0] for row in con.execute('SELECT file FROM _migrations')};con.close()
+ own_migrations={pathlib.Path(name).name for name in manifest['package'] if name.startswith('pb_migrations/')}
+ pending=[p.name for p in (root/'pb_migrations').glob('*.js') if p.name not in applied and p.name not in own_migrations]
+ if pending:raise RuntimeError('Other pending migrations need review: '+', '.join(sorted(pending)))
  owner=next((f for f in defs.get('users',[]) if f['name']=='manager_owner'),None)
  users_id=next(row[0] for row in definitions if row[1]=='users')
  if owner and (owner.get('type')!='relation' or owner.get('collectionId')!=users_id or owner.get('maxSelect')!=1 or owner.get('required')):raise RuntimeError('Conflicting users.manager_owner field')
@@ -35,6 +39,10 @@ def main():
   dst=root/name
   if dst.exists() and sha(dst) not in [manifest['package'][name],*manifest.get('previous',{}).get(name,[])]:raise RuntimeError('Manager file already differs: '+name+'. Review before replacing.')
  run('systemctl','is-active','pocketbase')
+ managed_hooks={pathlib.Path(name).name for name in manifest['package'] if name.startswith('pb_hooks/')}
+ protected=[p for p in (root/'pb_hooks').iterdir() if p.is_file() and p.name not in managed_hooks]
+ if (root/'pb_public/index.html').is_file():protected.append(root/'pb_public/index.html')
+ preserved={str(p):sha(p) for p in protected}
  print('PREFLIGHT: PASSED. Existing gateway and schema match; no server changes made.')
  if not args.install:return
  if os.geteuid()!=0:raise RuntimeError('Installation requires sudo')
@@ -64,13 +72,18 @@ def main():
     if e.code!=401:raise RuntimeError('Smoke failed: '+path+' '+str(e.code))
     json.loads(e.read())
   with urllib.request.urlopen('http://127.0.0.1:8090/manager/',timeout=5) as r:
-   if b'0.7.1' not in r.read():raise RuntimeError('Manager HTML check failed')
+   if hashlib.sha256(r.read()).hexdigest()!=manifest['package']['pb_public/manager/index.html']:raise RuntimeError('Served manager HTML differs from this package')
   con=sqlite3.connect('file:'+str(db)+'?mode=ro',uri=True)
   fields=json.loads(con.execute("SELECT fields FROM _collections WHERE name='users'").fetchone()[0]);con.close()
   if not any(f['name']=='manager_owner' and f['type']=='relation' for f in fields):raise RuntimeError('Ownership migration was not applied')
   for name,digest in manifest['gateway'].items():
    if sha(root/'pb_hooks'/name) not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Gateway changed unexpectedly')
+  for name,digest in preserved.items():
+   if sha(pathlib.Path(name))!=digest:raise RuntimeError('Protected client file changed: '+name)
+  for name,digest in manifest['package'].items():
+   if sha(root/name)!=digest:raise RuntimeError('Installed manager file differs: '+name)
   print('AUTO_DIRECTORY_INSTALLED: http://192.168.25.98:8090/manager/')
+  print('MANAGER_TABLE_INSTALLED:',manifest.get('interface_revision',manifest['version']))
   print('BACKUP:',backup)
   print('Manager 0.7.1 installed; client and gateway preserved; users.manager_owner added.')
  except Exception:
