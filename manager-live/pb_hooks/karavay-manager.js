@@ -14,9 +14,12 @@ function rows(app, col, filter, params) {
 function record(app,col,key) { try { return app.findRecordById(col,key); } catch(_) { fail(403,'ACCESS_DENIED'); } }
 function manager(app,uid) {
   const u=record(app,'users',uid);
-  if(u.get('active')!==true || u.get('must_change_password')===true || u.get('role_code')!=='manager') fail(403,'MANAGER_REQUIRED');
+  if(u.get('active')!==true)fail(403,'USER_INACTIVE');
+  if(u.get('must_change_password')===true)fail(403,'PASSWORD_CHANGE_REQUIRED');
+  if(u.get('role_code')!=='manager') fail(403,'MANAGER_REQUIRED');
   const role=record(app,'roles',u.get('role'));
-  if(role.get('active')!==true || role.get('code_role')!=='manager') fail(403,'MANAGER_REQUIRED');
+  if(role.get('active')!==true)fail(403,'ROLE_INACTIVE');
+  if(role.get('code_role')!=='manager') fail(403,'MANAGER_REQUIRED');
   const rights=rows(app,'rights','user = {:uid} && active = true',{uid});
   const map=new Map();
   for(const r of rights) {
@@ -164,7 +167,7 @@ function state(app,uid) {
       const u=record(app,'users',r.get('user'));if(!['owner','viewer'].includes(u.get('role_code')))continue;
       if(!users.has(u.id)) {
         let editable=true;try{target(app,m,u.id);}catch(_){editable=false;}
-        users.set(u.id,{id:u.id,name:u.get('name'),email:u.get('email'),login:u.get('login'),role_code:u.get('role_code'),active:u.get('active'),must_change_password:u.get('must_change_password'),editable,rights:[]});
+        users.set(u.id,{id:u.id,name:u.get('name'),email:u.get('email'),verified:u.get('verified')===true,login:u.get('login'),role_code:u.get('role_code'),active:u.get('active'),must_change_password:u.get('must_change_password'),editable,rights:[]});
       }
       users.get(u.id).rights.push({id:r.id,payer:pid,scope:r.get('scope'),kis_client_id:r.get('kis_client_id'),active:r.get('active')});
     }
@@ -172,12 +175,12 @@ function state(app,uid) {
   for(const u of rows(app,'users','manager_owner = {:uid}',{uid})) {
     if(users.has(u.id)||!['owner','viewer'].includes(u.get('role_code')))continue;
     const rs=rows(app,'rights','user = {:id}',{id:u.id});if(rs.length)continue;
-    users.set(u.id,{id:u.id,name:u.get('name'),email:u.get('email'),login:u.get('login'),role_code:u.get('role_code'),active:u.get('active'),must_change_password:u.get('must_change_password'),editable:true,rights:[]});
+    users.set(u.id,{id:u.id,name:u.get('name'),email:u.get('email'),verified:u.get('verified')===true,login:u.get('login'),role_code:u.get('role_code'),active:u.get('active'),must_change_password:u.get('must_change_password'),editable:true,rights:[]});
   }
   const now=manager(app,uid);
   const signature=x=>JSON.stringify(Array.from(x.map,([pid,a])=>[pid,a.all,Array.from(a.ids).sort(),a.record.get('id_pay'),a.record.get('active')]).sort());
   if(signature(m)!==signature(now))fail(403,'ACCESS_CHANGED');
-  return {version:'0.7.1',manager:{id:uid,name:m.user.get('name')},payers,users:Array.from(users.values())};
+  return {version:'0.8.0',manager:{id:uid,name:m.user.get('name'),email:m.user.get('email')},payers,users:Array.from(users.values())};
 }
 function mutate(e,b) {
   const uid=e.auth.id, app=e.app, m=manager(app,uid);
@@ -198,8 +201,9 @@ function mutate(e,b) {
   if(b.action==='create_payer'){
     if(!id(b.id_pay))fail(400,'INVALID_ID');
     const k=buyerCandidates(app,m).find(x=>x.id===b.id_pay);if(!k)fail(409,'PAYER_ALREADY_REGISTERED_OR_UNAVAILABLE');
-    b.code=k.code;b.name=k.name;text(b.code,100);text(b.name,300);text(b.email,254);
-    if(!/^\S+@\S+\.\S+$/.test(b.email))fail(400,'INVALID_EMAIL');
+    b.code=k.code;b.name=k.name;text(b.code,100);text(b.name,300);
+    if(b.email===undefined)b.email='';
+    if(typeof b.email!=='string'||b.email.length>254||(b.email.trim()&&!/^\S+@\S+\.\S+$/.test(b.email.trim())))fail(400,'INVALID_EMAIL');
     if(rows(app,'payers','id_pay = {:kid} || kod_pay = {:code}',{kid:b.id_pay,code:b.code}).length)fail(409,'PAYER_ALREADY_REGISTERED');
     // Onboard only a previously unmapped KIS buyer, never seize an existing PB record.
     const a={record:{get:k=>k==='id_pay'?b.id_pay:null},all:true,ids:new Set()};
@@ -232,7 +236,8 @@ function mutate(e,b) {
       const r=new Record(tx.findCollectionByNameOrId('rights'));r.set('user',uid);r.set('payer',p.id);r.set('scope','all');r.set('kis_client_id',0);r.set('active',true);tx.save(r);result={id:p.id};
     }else if(b.action==='edit_payer'){
       const p=area(fresh,b.payer,true,false).record;
-      p.set('name_pay',text(b.name,300));p.set('contact_email',text(b.email,254));p.set('phone',typeof b.phone==='string'?b.phone:'');
+      if(typeof b.email!=='string'||b.email.length>254||(b.email.trim()&&!/^\S+@\S+\.\S+$/.test(b.email.trim())))fail(400,'INVALID_EMAIL');
+      p.set('name_pay',text(b.name,300));p.set('contact_email',b.email.trim());p.set('phone',typeof b.phone==='string'?b.phone:'');
       if(typeof b.active!=='boolean')fail(400,'INVALID_INPUT');p.set('active',b.active);tx.save(p);result={id:p.id};
     }else if(b.action==='attach_client'){
       const a=area(fresh,b.payer,false,true);

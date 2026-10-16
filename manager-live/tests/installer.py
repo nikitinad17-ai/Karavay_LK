@@ -13,6 +13,7 @@ import sys
 import tempfile
 import types
 import unittest
+import urllib.error
 from unittest import mock
 
 SOURCE=pathlib.Path(__file__).resolve().parents[1]
@@ -94,5 +95,61 @@ class Preflight(unittest.TestCase):
   with self.assertRaisesRegex(RuntimeError,'Installation allowed only|Installation requires sudo'):
    self.preflight('--install')
   self.assertEqual(before,self.snapshot())
+
+ def simulated_install(self,fail_copy=False):
+  original_path=pathlib.Path;original_sha=installer.sha;original_copy=shutil.copy2
+  old=b'Known previous manager application'
+  target=self.root/'pb_public/manager/app.js';target.write_bytes(old)
+  (self.root/'pb_public/manager/theme.css').unlink()
+  backup_root=self.root/'backups';backup_root.mkdir()
+  def mapped_path(value='.',*parts):
+   if str(value)=='/opt/pocketbase':return self.root
+   if str(value)=='/opt':return backup_root
+   return original_path(value,*parts)
+  def fixture_sha(p):
+   if p.parent==self.root/'pb_hooks' and p.name in self.manifest['gateway']:return p.read_text()
+   if p==target and p.read_bytes()==old:return self.manifest['previous']['pb_public/manager/app.js'][-1]
+   return original_sha(p)
+  def run(*args):
+   if args==('systemctl','start','pocketbase'):
+    with sqlite3.connect(self.root/'pb_data/data.db') as con:
+     row=con.execute('SELECT id,fields FROM _collections WHERE name=?',('users',)).fetchone();fields=json.loads(row[1])
+     if not any(f['name']=='manager_owner' for f in fields):
+      fields.append({'name':'manager_owner','type':'relation','collectionId':row[0],'maxSelect':1,'required':False})
+      con.execute('UPDATE _collections SET fields=? WHERE name=?',(json.dumps(fields),'users'))
+   return types.SimpleNamespace(stdout='pocketbase version 0.40.3' if args[-1]=='--version' else 'active')
+  class Response:
+   status=200
+   def __init__(self,body=b''):self.body=body
+   def read(self):return self.body
+   def __enter__(self):return self
+   def __exit__(self,*_):pass
+  def urlopen(url,**_):
+   if url.endswith('/api/health'):return Response()
+   if url.endswith('/manager/'):return Response((SOURCE/'pb_public/manager/index.html').read_bytes())
+   raise urllib.error.HTTPError(url,401,'Unauthorized',{},io.BytesIO(b'{}'))
+  def copy(src,dst,*a,**kw):
+   if fail_copy and src==SOURCE/'pb_public/manager/app.js' and dst==target:
+    dst.write_bytes(b'PARTIAL WRITE');raise OSError('Simulated partial write')
+   return original_copy(src,dst,*a,**kw)
+  with mock.patch.object(installer.pathlib,'Path',side_effect=mapped_path),mock.patch.object(installer,'sha',side_effect=fixture_sha),mock.patch.object(installer,'run',side_effect=run),mock.patch.object(installer.os,'geteuid',return_value=0),mock.patch.object(installer.shutil,'chown'),mock.patch.object(installer.shutil,'copy2',side_effect=copy),mock.patch.object(installer.urllib.request,'urlopen',side_effect=urlopen),mock.patch.object(sys,'argv',['install.py','--install']),contextlib.redirect_stdout(io.StringIO()) as output:
+   if fail_copy:
+    with self.assertRaisesRegex(OSError,'Simulated partial write'):installer.main()
+   else:installer.main()
+  return old,target,backup_root,output.getvalue()
+
+ def test_install_preserves_client_and_creates_backup(self):
+  old,target,backups,output=self.simulated_install()
+  self.assertEqual(target.read_bytes(),(SOURCE/'pb_public/manager/app.js').read_bytes())
+  self.assertEqual((self.root/'pb_public/index.html').read_text(),'Existing client 3.8.0')
+  self.assertTrue((self.root/'pb_public/manager/theme.css').exists())
+  backup=next(backups.iterdir());self.assertEqual((backup/'pb_public/manager/app.js').read_bytes(),old)
+  self.assertIn('MANAGER_RELEASE_INSTALLED: 0.8.0',output)
+
+ def test_partial_copy_failure_restores_the_affected_file(self):
+  old,target,backups,output=self.simulated_install(fail_copy=True)
+  self.assertEqual(target.read_bytes(),old)
+  self.assertEqual((self.root/'pb_public/index.html').read_text(),'Existing client 3.8.0')
+  self.assertIn('ROLLED_BACK',output)
 
 if __name__=='__main__':unittest.main()

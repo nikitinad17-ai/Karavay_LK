@@ -1,0 +1,11 @@
+{
+  "repository": "nikitinad17-ai/Karavay_LK",
+  "branch": "feature/client-classic-orders-3.8",
+  "commit": "bd1951be67726944d9fcb6accb16e0e0897660b8",
+  "files": {
+    "quick-access/Create-Quick-Users.py": "648c430e589390524b8d7ec01b4c4cf0b4ce6d374d13bed54799ce851ba4e9a5",
+    "quick-access/launcher.js": "41ed48cd21b7b156883c3402107b7c3fb28c84869eeb4c253f20057d89635755",
+    "quick-access/launcher.css": "d67bf46dd378d9a6c1e04414a9a2066bf770c8007cc879abbb760629468300a3",
+    "scripts/Seed-Demo-Users.py": "d42ca961078655a4ed6d5a1ef7e5fc700722e3c307e9840d6fa2948ba8cb0f65"
+  }
+}

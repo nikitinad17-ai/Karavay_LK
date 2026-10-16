@@ -57,7 +57,8 @@ def main():
    dst=root/name
    if dst.exists():
     old=backup/name;old.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(dst,old);existing.append(name)
-   dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(SOURCE/name,dst);shutil.chown(dst,user='lindevadmin',group='lindevadmin');copied.append(name)
+   dst.parent.mkdir(parents=True,exist_ok=True);copied.append(name)
+   shutil.copy2(SOURCE/name,dst);shutil.chown(dst,user='lindevadmin',group='lindevadmin')
   run('systemctl','start','pocketbase')
   import time
   for i in range(50):
@@ -85,7 +86,8 @@ def main():
   print('AUTO_DIRECTORY_INSTALLED: http://192.168.25.98:8090/manager/')
   print('MANAGER_TABLE_INSTALLED:',manifest.get('interface_revision',manifest['version']))
   print('BACKUP:',backup)
-  print('Manager 0.7.1 installed; client and gateway preserved; users.manager_owner added.')
+  print('MANAGER_RELEASE_INSTALLED:',manifest['version'])
+  print('Client and gateway preserved; existing user passwords unchanged.')
  except Exception:
   run('systemctl','stop','pocketbase')
   for name in copied:
