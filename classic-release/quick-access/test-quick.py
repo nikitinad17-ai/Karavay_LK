@@ -14,6 +14,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -111,7 +112,25 @@ print(json.dumps({'success':True,'data':json.loads((root/'kis.json').read_text()
             api.token = admin
             role = api.create('roles', {'code_role': 'manager', 'name_role': 'Manager', 'active': True})['id']
             owner = api.create('roles', {'code_role': 'owner', 'name_role': 'Owner', 'active': True})['id']
-            mid = api.create('users', {'name': 'Fixture manager', 'email': 'manager@example.test', 'login': 'manager', 'role': role, 'role_code': 'manager', 'active': True, 'must_change_password': False, 'password': password, 'passwordConfirm': password})['id']
+            mid = api.create('users', {'name': 'Менеджер Каравай', 'email': 'manager.extra.letters@example.test', 'login': 'manager', 'role': role, 'role_code': 'manager', 'active': True, 'must_change_password': False, 'password': password, 'passwordConfirm': password})['id']
+            api.create('users', {'name': 'Fixture other manager', 'email': 'other.manager@example.test', 'login': 'other_manager', 'role': role, 'role_code': 'manager', 'active': True, 'must_change_password': False, 'password': password, 'passwordConfirm': password})
+            with patch('builtins.input', side_effect=AssertionError('Automatic manager selection must not prompt')):
+                assert quick.manager(api, preferred_name='Менеджер Каравай')['id'] == mid
+            with patch('builtins.input', return_value='Менеджер Каравай'):
+                assert quick.manager(api)['id'] == mid
+            with patch('builtins.input', return_value='admin@example.test'):
+                try:
+                    quick.manager(api)
+                    raise AssertionError('Superuser email must not select an unrelated manager')
+                except quick.Failure:
+                    pass
+            duplicate = api.create('users', {'name': 'Менеджер Каравай', 'email': 'duplicate.manager@example.test', 'login': 'duplicate_manager', 'role': role, 'role_code': 'manager', 'active': True, 'must_change_password': False, 'password': password, 'passwordConfirm': password})['id']
+            try:
+                quick.manager(api, preferred_name='Менеджер Каравай')
+                raise AssertionError('Expected duplicate manager name rejection')
+            except quick.Failure:
+                pass
+            call('/api/collections/users/records/' + duplicate, token=admin, method='DELETE', expected=204)
             foreign = api.create('payers', {'id_pay': 700050, 'kod_pay': 'K700050', 'name_pay': 'Fixture foreign', 'active': True})['id']
             snap = lambda: {c: api.rows(c, '') for c in ('users', 'rights', 'payers', 'clients')}
             before = snap()
@@ -123,7 +142,7 @@ print(json.dumps({'success':True,'data':json.loads((root/'kis.json').read_text()
             except quick.Failure:
                 pass
             assert before == snap()
-            quick.provision(api, False, BASE)
+            quick.provision(api, False, BASE, manager_name='Менеджер Каравай')
             assert before == snap() and not quick.STATE.exists() and not quick.OUTPUT.exists()
             # Interrupted user creation resumes the same plan and secrets.
             original_create = api.create
@@ -133,7 +152,7 @@ print(json.dumps({'success':True,'data':json.loads((root/'kis.json').read_text()
                 return original_create(collection, body)
             api.create = interrupt
             try:
-                quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202)
+                quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202, manager_name='Менеджер Каравай')
                 raise AssertionError('Expected interruption')
             except quick.Failure as error:
                 assert 'Simulated' in str(error)
@@ -141,7 +160,7 @@ print(json.dumps({'success':True,'data':json.loads((root/'kis.json').read_text()
             first = api.rows('users', 'id = ' + json.dumps(plan_before['accounts'][0]['id']))[0]
             assert first['active'] is False
             api.create = original_create
-            quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202)
+            quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202, manager_name='Менеджер Каравай')
             plan = quick.load_plan()
             assert [p['kid'] for p in plan['payers']] == [700201, 700101]
             assert plan['manager'] == mid and all(a['done'] for a in plan['accounts'])
@@ -155,8 +174,14 @@ print(json.dumps({'success':True,'data':json.loads((root/'kis.json').read_text()
             assert foreign not in {r['payer'] for r in api.rows('rights', 'user = ' + json.dumps(mid))}
             assert not any(path in ('/payers/299271', '/payers/300182', '/payers/700001', '/payers/700050/clients') for path in kis_calls)
             ready = snap()
-            quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202)
+            quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202, manager_name='Менеджер Каравай')
             assert ready == snap()  # No password reset, duplicate or unrelated record update.
+            try:
+                quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202, manager_name='Fixture other manager')
+                raise AssertionError('Expected saved manager drift rejection')
+            except quick.Failure as error:
+                assert 'другому менеджеру' in str(error)
+            assert ready == snap()
             try:
                 quick.provision(api, True, BASE, payer_ids=[700101, 700201], client_id=700102)
                 raise AssertionError('Expected saved-plan drift rejection')
@@ -175,7 +200,7 @@ print(json.dumps({'success':True,'data':json.loads((root/'kis.json').read_text()
             api.call('/api/collections/users/records/' + accounts[0]['id'], {'active': False}, 'PATCH')
             disabled = snap()
             try:
-                quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202)
+                quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202, manager_name='Менеджер Каравай')
                 raise AssertionError('Expected disabled rejection')
             except quick.Failure as error:
                 assert 'отключён' in str(error)

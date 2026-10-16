@@ -8,7 +8,12 @@ import zipfile
 
 HERE = Path(__file__).resolve().parent
 pin_kis_23 = '--pin-kis-2-3' in sys.argv[2:]
+manager_fix = '--manager-fix' in sys.argv[2:]
+if manager_fix and not pin_kis_23:
+    raise SystemExit('--manager-fix requires --pin-kis-2-3')
 package_name = 'Karavay-Quick-Access-KIS-2-3-20261016' if pin_kis_23 else 'Karavay-Quick-Access-20261016'
+if manager_fix:
+    package_name = 'Karavay-Quick-Access-KIS-2-3-Manager-Fix-20261016'
 output = Path(sys.argv[1]).resolve()
 output.mkdir(parents=True, exist_ok=True)
 payload = io.BytesIO()
@@ -38,6 +43,8 @@ script = script.replace('KАRАVАY', 'KARAVAY')
 if pin_kis_23:
     script = script.replace('Downloads\\Karavay-Quick-Access-20261016', 'Downloads\\' + package_name)
     script = script.replace("& (Join-Path $taskDir 'Start-Karavay-Test-Users.ps1')", "& (Join-Path $taskDir 'Start-Karavay-Test-Users.ps1') -PinKis23")
+if manager_fix:
+    script = script.replace(' -PinKis23', ' -PinKis23 -ManagerKaravay')
 target = output / (package_name + '.ps1')
 target.write_text(script, encoding='ascii', newline='\r\n')
 print(target)

@@ -79,20 +79,30 @@ def account_specs(mid):
     ]
 
 
-def manager(api, wanted=None):
+def manager(api, wanted=None, preferred_name=None):
     role = seed.only(api.rows('roles', 'active = true && code_role = "manager"'), 'Активная роль manager')
     candidates = api.rows('users', 'active = true && must_change_password = false && role_code = "manager" && role = ' + json.dumps(role['id']))
     if wanted:
-        return seed.only([u for u in candidates if u['id'] == wanted], 'Выбранный активный менеджер')
+        chosen = seed.only([u for u in candidates if u['id'] == wanted], 'Выбранный активный менеджер')
+        if preferred_name and chosen.get('name', '').strip().casefold() != preferred_name.strip().casefold():
+            raise Failure('Сохранённый план принадлежит другому менеджеру. Автоматическая смена отменена.')
+        print('Выбран менеджер:', chosen.get('name', ''), '|', chosen['email'])
+        return chosen
     if not candidates:
         raise Failure('Нет активного менеджера. Сначала настройте его в PocketBase.')
+    if preferred_name:
+        chosen = seed.only([u for u in candidates if u.get('name', '').strip().casefold() == preferred_name.strip().casefold()], 'Активный менеджер «' + preferred_name + '»')
+        print('Выбран менеджер:', chosen.get('name', ''), '|', chosen['email'])
+        return chosen
     if len(candidates) == 1:
         return candidates[0]
     print('Активные менеджеры:')
-    for u in candidates:
-        print(' ', u.get('name', ''), '|', u['email'])
-    email = input('Email менеджера для тестовых пользователей: ').strip().lower()
-    return seed.only([u for u in candidates if u['email'].lower() == email], 'Менеджер')
+    for index, u in enumerate(candidates, 1):
+        print(' ', index, '—', u.get('name', ''), '|', u['email'])
+    value = input('Номер, название или email менеджера: ').strip().casefold()
+    if value.isdecimal() and 1 <= int(value) <= len(candidates):
+        return candidates[int(value) - 1]
+    return seed.only([u for u in candidates if u['email'].casefold() == value or u.get('name', '').strip().casefold() == value], 'Менеджер')
 
 
 def whole_rights(api, mid):
@@ -207,11 +217,11 @@ def verify_login(api, account, expected):
         private.token = ''
 
 
-def provision(api, apply, public_base=PB_PUBLIC, payer_ids=None, client_id=None):
+def provision(api, apply, public_base=PB_PUBLIC, payer_ids=None, client_id=None, manager_name=None):
     plan = load_plan()
     if plan and payer_ids is not None and ([p['kid'] for p in plan['payers']] != payer_ids or plan['client'] != client_id):
         raise Failure('Сохранённый план содержит других покупателей/получателя. Существующие аккаунты и назначения не перезаписаны.')
-    mid = manager(api, plan['manager'] if plan else None)['id']
+    mid = manager(api, plan['manager'] if plan else None, manager_name)['id']
     owner = seed.only(api.rows('roles', 'active = true && code_role = "owner"'), 'Активная роль owner')
     if plan is None:
         plan = choose(api, mid, payer_ids, client_id)
@@ -313,6 +323,7 @@ def main():
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--payers', type=int, nargs=2, metavar=('FIRST', 'SECOND'))
     parser.add_argument('--client', type=int)
+    parser.add_argument('--manager-karavay', action='store_true', help='Select the unique active user named Менеджер Каравай')
     args = parser.parse_args()
     if (args.payers is None) != (args.client is None):
         parser.error('--payers and --client must be provided together')
@@ -332,7 +343,7 @@ def main():
         api.token = auth['token']
         auth = None
         try:
-            provision(api, args.apply, payer_ids=args.payers, client_id=args.client)
+            provision(api, args.apply, payer_ids=args.payers, client_id=args.client, manager_name='Менеджер Каравай' if args.manager_karavay else None)
         finally:
             api.token = ''
 
