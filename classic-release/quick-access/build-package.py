@@ -7,6 +7,8 @@ import sys
 import zipfile
 
 HERE = Path(__file__).resolve().parent
+pin_kis_23 = '--pin-kis-2-3' in sys.argv[2:]
+package_name = 'Karavay-Quick-Access-KIS-2-3-20261016' if pin_kis_23 else 'Karavay-Quick-Access-20261016'
 output = Path(sys.argv[1]).resolve()
 output.mkdir(parents=True, exist_ok=True)
 payload = io.BytesIO()
@@ -33,6 +35,9 @@ Expand-Archive -LiteralPath $taskZip -DestinationPath $taskDir -Force
 '''.replace('__PAYLOAD__', encoded).replace('__SHA256__', digest)
 # ASCII avoids Windows PowerShell 5.1 interpreting UTF-8 source as ANSI.
 script = script.replace('KАRАVАY', 'KARAVAY')
-target = output / 'Karavay-Quick-Access-20261016.ps1'
+if pin_kis_23:
+    script = script.replace('Downloads\\Karavay-Quick-Access-20261016', 'Downloads\\' + package_name)
+    script = script.replace("& (Join-Path $taskDir 'Start-Karavay-Test-Users.ps1')", "& (Join-Path $taskDir 'Start-Karavay-Test-Users.ps1') -PinKis23")
+target = output / (package_name + '.ps1')
 target.write_text(script, encoding='ascii', newline='\r\n')
 print(target)

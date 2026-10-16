@@ -115,6 +115,14 @@ print(json.dumps({'success':True,'data':json.loads((root/'kis.json').read_text()
             foreign = api.create('payers', {'id_pay': 700050, 'kod_pay': 'K700050', 'name_pay': 'Fixture foreign', 'active': True})['id']
             snap = lambda: {c: api.rows(c, '') for c in ('users', 'rights', 'payers', 'clients')}
             before = snap()
+            pinned = quick.choose(api, mid, [700101, 700201], 700102)
+            assert [p['kid'] for p in pinned['payers']] == [700101, 700201] and pinned['client'] == 700102
+            try:
+                quick.choose(api, mid, [700050, 700201], 700051)
+                raise AssertionError('Expected foreign pinned buyer rejection')
+            except quick.Failure:
+                pass
+            assert before == snap()
             quick.provision(api, False, BASE)
             assert before == snap() and not quick.STATE.exists() and not quick.OUTPUT.exists()
             # Interrupted user creation resumes the same plan and secrets.
@@ -125,7 +133,7 @@ print(json.dumps({'success':True,'data':json.loads((root/'kis.json').read_text()
                 return original_create(collection, body)
             api.create = interrupt
             try:
-                quick.provision(api, True, BASE)
+                quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202)
                 raise AssertionError('Expected interruption')
             except quick.Failure as error:
                 assert 'Simulated' in str(error)
@@ -133,7 +141,7 @@ print(json.dumps({'success':True,'data':json.loads((root/'kis.json').read_text()
             first = api.rows('users', 'id = ' + json.dumps(plan_before['accounts'][0]['id']))[0]
             assert first['active'] is False
             api.create = original_create
-            quick.provision(api, True, BASE)
+            quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202)
             plan = quick.load_plan()
             assert [p['kid'] for p in plan['payers']] == [700201, 700101]
             assert plan['manager'] == mid and all(a['done'] for a in plan['accounts'])
@@ -147,8 +155,14 @@ print(json.dumps({'success':True,'data':json.loads((root/'kis.json').read_text()
             assert foreign not in {r['payer'] for r in api.rows('rights', 'user = ' + json.dumps(mid))}
             assert not any(path in ('/payers/299271', '/payers/300182', '/payers/700001', '/payers/700050/clients') for path in kis_calls)
             ready = snap()
-            quick.provision(api, True, BASE)
+            quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202)
             assert ready == snap()  # No password reset, duplicate or unrelated record update.
+            try:
+                quick.provision(api, True, BASE, payer_ids=[700101, 700201], client_id=700102)
+                raise AssertionError('Expected saved-plan drift rejection')
+            except quick.Failure as error:
+                assert 'Сохранённый план' in str(error)
+            assert ready == snap()
             auth = call('/api/collections/users/auth-with-password', {'identity': accounts[0]['email'], 'password': accounts[0]['password']})
             assert call('/service/clients?payer=' + plan['payers'][1]['id'], token=auth['token'], expected=403)['code']
             assert call('/service/clients?payer=' + foreign, token=auth['token'], expected=403)['code']
@@ -161,7 +175,7 @@ print(json.dumps({'success':True,'data':json.loads((root/'kis.json').read_text()
             api.call('/api/collections/users/records/' + accounts[0]['id'], {'active': False}, 'PATCH')
             disabled = snap()
             try:
-                quick.provision(api, True, BASE)
+                quick.provision(api, True, BASE, payer_ids=[700201, 700101], client_id=700202)
                 raise AssertionError('Expected disabled rejection')
             except quick.Failure as error:
                 assert 'отключён' in str(error)

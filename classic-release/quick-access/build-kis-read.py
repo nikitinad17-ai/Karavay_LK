@@ -21,8 +21,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not upload the script. Check SSH access 
 & ssh $vm "python3 $vmScript --output $vmReport"
 $vmStatus = $LASTEXITCODE
 # Download the diagnostic report even if KIS was unavailable.
-& scp "${vm}:${vmReport}.json" "${vm}:${vmReport}.txt" $taskDir
-if ($LASTEXITCODE -ne 0) { throw 'Could not download the report. Read the SSH output above.' }
+& scp "${vm}:${vmReport}.json" $taskDir
+if ($LASTEXITCODE -ne 0) { throw 'Could not download the JSON report. Read the SSH output above.' }
+& scp "${vm}:${vmReport}.txt" $taskDir
+if ($LASTEXITCODE -ne 0) { throw 'JSON downloaded; could not download the TXT report. Read the SSH output above.' }
 $textReport = Join-Path $taskDir 'Karavay-KIS-VM-20261016.txt'
 Write-Host "Report saved: $taskDir"
 Start-Process $textReport

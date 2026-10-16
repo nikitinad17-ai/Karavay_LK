@@ -1,3 +1,4 @@
+param([switch]$PinKis23)
 $ErrorActionPreference = 'Stop'
 $taskDir = $PSScriptRoot
 $remoteDir = '/home/lindevadmin/karavay-quick-access-20261016'
@@ -12,7 +13,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not upload the setup files.' }
 & scp (Join-Path $taskDir 'Seed-Demo-Users.py') "${remoteHome}:$remoteDir/scripts/"
 if ($LASTEXITCODE -ne 0) { throw 'Could not upload the KIS helper.' }
 
-& ssh -t $remoteHome "python3 $remoteDir/quick-access/Create-Quick-Users.py --apply"
+$pinArguments = if ($PinKis23) { ' --payers 2 3 --client 2' } else { '' }
+& ssh -t $remoteHome "python3 $remoteDir/quick-access/Create-Quick-Users.py --apply$pinArguments"
 if ($LASTEXITCODE -ne 0) { throw 'Setup stopped. Read the message above. Repeating the same command resumes safely.' }
 
 $localHtml = Join-Path $env:USERPROFILE 'Downloads\Karavay-Test-Login.html'

@@ -100,25 +100,34 @@ def whole_rights(api, mid):
     return {r['payer'] for r in rights if r.get('active') is True and r.get('scope') == 'all' and r.get('kis_client_id') == 0 and not r.get('client')}
 
 
-def choose(api, mid):
+def choose(api, mid, payer_ids=None, client_id=None):
     allowed = whole_rights(api, mid)
     directory = seed.checked_list(api.call('/payers', kis=True), 10000)
+    directory_count = len(directory)
+    if payer_ids is not None:
+        if len(payer_ids) != 2 or len(set(payer_ids)) != 2 or any(not seed.valid_id(pid) or pid in seed.EXCLUDED_IDS for pid in payer_ids) or not seed.valid_id(client_id):
+            raise Failure('Нужны два разных допустимых ID покупателей и ID получателя.')
+        directory = [seed.only([row for row in directory if row['id'] == pid], 'Покупатель КИС ' + str(pid)) for pid in payer_ids]
     eligible = []
-    print('КИС:', len(directory), 'покупателей. Исключены НЕВА, ПРОМТЕХСБЫТ и чужие назначения.', flush=True)
+    print('КИС:', directory_count, 'покупателей. Исключены НЕВА, ПРОМТЕХСБЫТ и чужие назначения.', flush=True)
     for row in directory:
         if seed.excluded(row):
             continue
         payer = seed.buyer_mapping(api, row['id'])
         if not payer or (payer['id'] and payer['id'] not in allowed):
+            if payer_ids is not None:
+                raise Failure('Закреплённый покупатель КИС ' + str(row['id']) + ' недоступен в полной области менеджера. Другую компанию не подставляем.')
             continue
-        points = seed.recipients(api, payer)
+        points = seed.recipients(api, payer, client_id if payer_ids is not None and row['id'] == payer_ids[0] else None)
         if points:
             eligible.append((payer, points))
         if len(eligible) >= 2 and (any(len(pair[1]) > 1 for pair in eligible) or len(eligible) >= 20):
             break
     if len(eligible) < 2:
         raise Failure('Не найдены два других покупателя с активными получателями в допустимой области. Записей не сделано.')
-    first = next((pair for pair in eligible if len(pair[1]) > 1), eligible[0])
+    first = eligible[0] if payer_ids is not None else next((pair for pair in eligible if len(pair[1]) > 1), eligible[0])
+    if payer_ids is not None and first[0]['id_pay'] != payer_ids[0]:
+        raise Failure('Закреплённый получатель первого покупателя недоступен. Подстановка другой точки отменена.')
     second = next(pair for pair in eligible if pair[0]['id_pay'] != first[0]['id_pay'])
     return {
         'version': 1, 'manager': mid,
@@ -198,12 +207,14 @@ def verify_login(api, account, expected):
         private.token = ''
 
 
-def provision(api, apply, public_base=PB_PUBLIC):
+def provision(api, apply, public_base=PB_PUBLIC, payer_ids=None, client_id=None):
     plan = load_plan()
+    if plan and payer_ids is not None and ([p['kid'] for p in plan['payers']] != payer_ids or plan['client'] != client_id):
+        raise Failure('Сохранённый план содержит других покупателей/получателя. Существующие аккаунты и назначения не перезаписаны.')
     mid = manager(api, plan['manager'] if plan else None)['id']
     owner = seed.only(api.rows('roles', 'active = true && code_role = "owner"'), 'Активная роль owner')
     if plan is None:
-        plan = choose(api, mid)
+        plan = choose(api, mid, payer_ids, client_id)
     definitions = {col: api.call('/api/collections/' + col) for col in ('users', 'payers')}
     manager_owner = any(f['name'] == 'manager_owner' for f in definitions['users']['fields'])
     allowed = whole_rights(api, mid)
@@ -300,7 +311,11 @@ def provision(api, apply, public_base=PB_PUBLIC):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--payers', type=int, nargs=2, metavar=('FIRST', 'SECOND'))
+    parser.add_argument('--client', type=int)
     args = parser.parse_args()
+    if (args.payers is None) != (args.client is None):
+        parser.error('--payers and --client must be provided together')
     if not sys.stdin.isatty():
         raise Failure('Запускайте через ssh -t. Пароли в аргументы не передавайте.')
     fd = os.open(str(STATE) + '.lock', os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -317,7 +332,7 @@ def main():
         api.token = auth['token']
         auth = None
         try:
-            provision(api, args.apply)
+            provision(api, args.apply, payer_ids=args.payers, client_id=args.client)
         finally:
             api.token = ''
 
