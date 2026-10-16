@@ -12,3 +12,7 @@ playwright-report/
 .env.local
 .env.*.local
 .DS_Store
+
+classic-dist/
+classic-release/pb_public/
+__pycache__/

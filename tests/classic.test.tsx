@@ -7,6 +7,7 @@ let requests:string[]=[];
 const response=(data:unknown,status=200)=>Promise.resolve(new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}}));
 function mockFetch(input:RequestInfo|URL,init?:RequestInit){
  const path=String(input);requests.push(path);
+ if(path==='/service/test-access')return response({code:'TEST_ACCESS_DISABLED'},404);
  if(path.endsWith('auth-with-password'))return response({token:'test-only',record:{id:'uuuuuuuuuuuuuuu',email:'demo@karavay.example',active:true,must_change_password:false}});
  if(path==='/service/context')return response({user:{name:'Покупатель (демо)',role:'owner'},payers:[{id:p1,name:'Первый покупатель',access:'all'},{id:p2,name:'Второй покупатель',access:'limited'}]});
  if(path.startsWith('/service/clients'))return response({payer:path.includes(p1)?p1:p2,clients:[{id:path.includes(p1)?11:21,code:'T01',name:'Получатель из КИС',address:'Адрес из КИС'}],count:1,hasMore:false,nextCursor:null});
@@ -16,10 +17,26 @@ function mockFetch(input:RequestInfo|URL,init?:RequestInit){
  if(path.startsWith('/service/orders?'))return response({payer:p1,client:11,count:1,orders:[{id:7,order_number:948,kol_sht:15,sum_all:917.4,state:0}]});
  throw new Error('Unexpected request '+path+' '+init?.method);
 }
-beforeEach(()=>{requests=[];sessionStorage.clear();api.clearSession();vi.stubGlobal('fetch',vi.fn(mockFetch));vi.spyOn(window,'confirm').mockReturnValue(true);});
+beforeEach(()=>{requests=[];sessionStorage.clear();localStorage.clear();api.clearSession();vi.stubGlobal('fetch',vi.fn(mockFetch));vi.spyOn(window,'confirm').mockReturnValue(true);});
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();api.clearSession();});
 async function signIn(){render(<App/>);await screen.findByLabelText('Email');fireEvent.change(screen.getByLabelText('Email'),{target:{value:'demo@karavay.example'}});fireEvent.change(screen.getByLabelText('Пароль'),{target:{value:'test-only-password'}});fireEvent.click(screen.getByRole('button',{name:'Войти'}));await screen.findByText('Добро пожаловать, Покупатель (демо)');fireEvent.change(screen.getByLabelText('Покупатель'),{target:{value:p1}});await waitFor(()=>expect((screen.getByLabelText('Получатель') as HTMLSelectElement).value).toBe('11'));}
 describe('Classic service mode',()=>{
+ it('offers test buttons without password fields and restores the account across browser sessions',async()=>{
+  const account={id:'uuuuuuuuuuuuuuu',name:'Один получатель (тест)',email:'demo.test.point@example.test',description:'Каравай · получатель из КИС'};
+  vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
+   const path=String(input);
+   if(path==='/service/test-access'&&init?.method!=='POST')return response({environment:'test-kis',accounts:[account]});
+   if(path==='/service/test-access'||path.endsWith('/auth-refresh'))return response({token:'test-session',record:{...account,active:true,must_change_password:false}});
+   return mockFetch(input,init);
+  }));
+  render(<App/>);fireEvent.click(await screen.findByRole('button',{name:/Один получатель/}));
+  await screen.findByText('Добро пожаловать, Покупатель (демо)');expect(screen.queryByLabelText('Пароль')).not.toBeInTheDocument();
+  const body:api.OrderDraft={payer:p1,client:11,DateOrd:api.timestamp('2026-10-16'),Group:1,products:[{id:66,quantity:8,price:34.9}]};
+  const pending=api.savePending(body);cleanup();sessionStorage.clear();
+  render(<App/>);await screen.findByText('Добро пожаловать, Покупатель (демо)');expect(api.getSession()?.test).toBe(true);expect(api.pending()?.key).toBe(pending.key);
+  fireEvent.click(screen.getByRole('button',{name:'Выйти'}));await screen.findByRole('button',{name:/Один получатель/});expect(localStorage.getItem('karavay_classic_session_v1')).toBeNull();
+  expect(vi.mocked(fetch).mock.calls.some(([path])=>String(path).endsWith('/auth-with-password'))).toBe(false);
+ });
  it('uses midnight Saint Petersburg independently of host timezone and rejects invalid dates',()=>{expect(api.timestamp('2026-10-14')).toBe(Date.parse('2026-10-13T21:00:00Z')/1000);expect(()=>api.timestamp('2026-02-30')).toThrow();});
  it('keeps price absence distinct from zero and validates the KIS minimum',()=>{const p={id:1,cenaotp:12,kolshtordmin:4} as api.Product;expect(api.quantityError(p,3)).toContain('4');expect(api.quantityError(p,4)).toBe('');expect(api.quantityError({...p,cenaotp:null},4)).toContain('цена');});
  it('loads real gateway data, converts a tray to pieces, preserves edits on cancelling scope change',async()=>{await signIn();fireEvent.click(screen.getByRole('link',{name:'Оформить заказ'}));fireEvent.click(screen.getByRole('button',{name:'Показать прайс-лист'}));await screen.findByText('Хлеб из КИС');fireEvent.click(screen.getByRole('button',{name:'Добавить лоток 1263'}));expect(screen.getByLabelText('Лотки 1263')).toHaveValue('1');fireEvent.click(screen.getAllByRole('button',{name:'Проверить заказ'})[0]);expect(screen.getByRole('dialog')).toHaveTextContent('8 шт.');expect(screen.getByRole('button',{name:'Отправить заказ'})).toBeDisabled();fireEvent.click(screen.getByRole('button',{name:'Вернуться к заказу'}));vi.mocked(window.confirm).mockReturnValue(false);fireEvent.change(screen.getByLabelText('Покупатель'),{target:{value:p2}});expect(screen.getByLabelText('Лотки 1263')).toHaveValue('1');expect(requests.some(p=>p.startsWith('/api/v1'))).toBe(false);});

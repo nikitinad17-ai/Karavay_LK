@@ -1,17 +1,19 @@
 {
-  "version": "3.8.0",
+  "version": "3.8.1",
   "status": "ready-for-vm-verification",
-  "html_sha256": "899f81157a6204251fb2348af8b244ac8a465ecb3186a0aa08be951306f49f0b",
+  "html_sha256": "b79b6009c6804ddbf941566d77bc1a24fc5b51fc84c98fd14ae9b6c7b3eaaca6",
   "design": "3.6.4",
   "create_order_enabled": true,
   "order_lines_enabled": true,
   "live_kis_post_verified": false,
   "manager_modified": false,
   "package": {
-    "pb_public/index.html": "899f81157a6204251fb2348af8b244ac8a465ecb3186a0aa08be951306f49f0b",
+    "pb_public/index.html": "b79b6009c6804ddbf941566d77bc1a24fc5b51fc84c98fd14ae9b6c7b3eaaca6",
     "pb_hooks/karavay-checkout.js": "dbf3abc45b85692d1dc5bfe5e9293198a737d996e7ec862dd6b20ba8681ea40b",
     "pb_hooks/karavay-order-details.pb.js": "1525522db03cb5dee38e18e03fdd19210dbc833ff657e2270ed4340fe4009d88",
     "pb_hooks/karavay-orders.pb.js": "7d600e8a8216f9ab5a84fffe790304ae1fbaadf1bf8324f9449392d7c69652d4",
+    "pb_hooks/karavay-test-access.js": "664c97a27bde4a91a6b6f9ea8d9a38c7dda799ec0a89b8dbf484901bc7929d8f",
+    "pb_hooks/karavay-test-access.pb.js": "8bcca34c0fb84e30b4592b5ddb4ad17e8ab3ffc2b887f8376074a38bce1e540c",
     "pb_migrations/1792000000_classic_order_requests.js": "e349f366687677ea447c1e34d647a747972d794a8b2949296bc85119761df168"
   },
   "gateway_preserved": {
@@ -21,6 +23,7 @@
   },
   "previous": {
     "pb_public/index.html": [
+      "899f81157a6204251fb2348af8b244ac8a465ecb3186a0aa08be951306f49f0b",
       "02574f1c1d0a98684aa8550ff5b3dccf1a5d9867bcddca3a4672c91518c4c12e",
       "54d6097346efb055507ae669697159a80cf13a73350c9cd50837a0571106ed2c"
     ],
@@ -59,5 +62,5 @@
       "active": "bool"
     }
   },
-  "installer_sha256": "f878b433806689b47b0d1bfbba97550de54e014dc4715a677a0aa59b7f8e663c"
+  "installer_sha256": "3358762010ec0b9e1e7e40168c1fb57b3db0b80d19cbebf332c0c015024ab1fb"
 }

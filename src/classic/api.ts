@@ -8,9 +8,11 @@ export interface Detail {payer:string;client:number;order:Order;items:Item[]|nul
 export interface Options {create:boolean;details:boolean;minimumSum:number|null;minimumSumIncludesVat:boolean|null;reason:string}
 export const CLOSED:Options={create:false,details:false,minimumSum:null,minimumSumIncludesVat:null,reason:'Отправка заказа ещё не подключена.'};
 const KEY='karavay_classic_session_v1';
-let session:{token:string;id:string;email:string}|null=null;
+export interface TestAccount {id:string;name:string;email:string;description:string}
+interface Session {token:string;id:string;email:string;test?:boolean}
+let session:Session|null=null;
 export const getSession=()=>session;
-export function clearSession(){session=null;try{sessionStorage.removeItem(KEY);}catch{}}
+export function clearSession(){session=null;for(const storage of [sessionStorage,localStorage])try{storage.removeItem(KEY);}catch{}}
 export class ApiError extends Error {constructor(public status:number,public code:string){super(code);}}
 const explanations:Record<string,string>={
  PRICE_CHANGED:'Цена изменилась. Обновите прайс-лист и проверьте заказ.',
@@ -24,7 +26,7 @@ const explanations:Record<string,string>={
 };
 export const message=(e:unknown)=>e instanceof ApiError ? (explanations[e.code]||{401:'Сессия завершена. Войдите снова.',403:'Доступ изменён или запрещён.',504:'КИС не ответила вовремя. Повторите загрузку.'}[e.status]||'Не удалось получить данные. Код: '+e.code) : e instanceof Error&&e.name==='AbortError'?'Запрос отменён.':'Не удалось выполнить запрос. Попробуйте ещё раз.';
 export async function request<T>(path:string,options:RequestInit={}):Promise<T>{
-  if(path!=='/service/account/change-password'&&!/^\/service\/(context|clients|catalog|orders(?:\/\d+)?|order-requests\/[a-f0-9]{32}|order-options)(\?|$)/.test(path)&&!/^\/api\/collections\/users\/(auth-with-password|auth-refresh|records\/[a-z0-9]{15})$/.test(path))throw new Error('Unexpected route');
+  if(path!=='/service/account/change-password'&&path!=='/service/test-access'&&!/^\/service\/(context|clients|catalog|orders(?:\/\d+)?|order-requests\/[a-f0-9]{32}|order-options)(\?|$)/.test(path)&&!/^\/api\/collections\/users\/(auth-with-password|auth-refresh|records\/[a-z0-9]{15})$/.test(path))throw new Error('Unexpected route');
   const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),60000);
   const abort=()=>ctrl.abort();options.signal?.addEventListener('abort',abort,{once:true});
   if(options.signal?.aborted)ctrl.abort();
@@ -34,13 +36,15 @@ export async function request<T>(path:string,options:RequestInit={}):Promise<T>{
     const d=await r.json();if(!r.ok){if(r.status===401)clearSession();throw new ApiError(r.status,typeof d.code==='string'?d.code:'REQUEST_FAILED');}return d as T;
   }finally{clearTimeout(timer);options.signal?.removeEventListener('abort',abort);}
 }
-function accept(d:{token:string;record:{id:string;email:string;active:boolean;must_change_password:boolean}}){
+function accept(d:{token:string;record:{id:string;email:string;active:boolean;must_change_password:boolean}},test=false){
   if(!d.token||!/^\w{15}$/.test(d.record?.id)||d.record.active!==true)throw new ApiError(403,'INVALID_ACCOUNT');
-  session={token:d.token,id:d.record.id,email:d.record.email};try{sessionStorage.setItem(KEY,JSON.stringify(session));}catch{}
+  session={token:d.token,id:d.record.id,email:d.record.email,...(test?{test:true}:{})};try{(test?localStorage:sessionStorage).setItem(KEY,JSON.stringify(session));}catch{}
   return d.record.must_change_password===true;
 }
 export async function login(email:string,password:string){clearSession();return accept(await request('/api/collections/users/auth-with-password',{method:'POST',body:JSON.stringify({identity:email,password})}));}
-export async function restore(){try{const stored=JSON.parse(sessionStorage.getItem(KEY)||'null');if(!stored?.token||!stored?.id)return null;session=stored;const d=await request<Parameters<typeof accept>[0]>('/api/collections/users/auth-refresh',{method:'POST'});if(d.record.id!==stored.id)throw new ApiError(403,'ACCOUNT_CHANGED');return accept(d);}catch(e){clearSession();throw e;}}
+export async function testAccounts(){const d=await request<{environment:string;accounts:TestAccount[]}>('/service/test-access');if(d.environment!=='test-kis'||!Array.isArray(d.accounts)||d.accounts.length>3||d.accounts.some(a=>!/^[a-z0-9]{15}$/.test(a.id)||[a.name,a.email,a.description].some(s=>typeof s!=='string')))throw new ApiError(502,'INVALID_TEST_ACCESS');return d.accounts;}
+export async function testLogin(id:string){if(!/^[a-z0-9]{15}$/.test(id))throw new Error('Invalid test account');clearSession();const d=await request<Parameters<typeof accept>[0]>('/service/test-access',{method:'POST',body:JSON.stringify({id})});if(d.record.id!==id||d.record.must_change_password===true)throw new ApiError(403,'INVALID_ACCOUNT');return accept(d,true);}
+export async function restore(){try{const stored:Session|null=JSON.parse(sessionStorage.getItem(KEY)||localStorage.getItem(KEY)||'null');if(!stored?.token||!stored?.id)return null;session=stored;if(stored.test&&!(await testAccounts()).some(a=>a.id===stored.id))throw new ApiError(403,'ACCESS_DENIED');const d=await request<Parameters<typeof accept>[0]>('/api/collections/users/auth-refresh',{method:'POST'});if(d.record.id!==stored.id)throw new ApiError(403,'ACCOUNT_CHANGED');return accept(d,stored.test===true);}catch(e){clearSession();throw e;}}
 export async function changePassword(oldPassword:string,password:string){if(!session)throw new ApiError(401,'AUTH_REQUIRED');await request('/service/account/change-password',{method:'POST',body:JSON.stringify({oldPassword,password})});clearSession();}
 export function validId(n:unknown):n is number{return typeof n==='number'&&Number.isSafeInteger(n)&&n>0;}
 export function params(payer:string,client:number){if(!/^[a-z0-9]{15}$/.test(payer)||!validId(client))throw new Error('Invalid context');return 'payer='+payer+'&client='+client;}
@@ -65,9 +69,10 @@ export interface OrderDraft {payer:string;client:number;DateOrd:number;Group:num
 export interface Submission {key:string;body:OrderDraft}
 export interface SubmissionStatus {state:'pending'|'unknown'|'success'|'rejected'|'not_found';result:{id?:number;code?:string}|null}
 function pendingKey(){if(!session)throw new ApiError(401,'AUTH_REQUIRED');return 'karavay_pending_order_'+session.id;}
-export function pending():Submission|null {try{return JSON.parse(sessionStorage.getItem(pendingKey())||'null');}catch{return null;}}
-export function savePending(body:OrderDraft){const value={key:Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join(''),body};sessionStorage.setItem(pendingKey(),JSON.stringify(value));return value;}
-export function forgetPending(){sessionStorage.removeItem(pendingKey());}
+function pendingStorage(){return session?.test?localStorage:sessionStorage;}
+export function pending():Submission|null {try{return JSON.parse(pendingStorage().getItem(pendingKey())||'null');}catch{return null;}}
+export function savePending(body:OrderDraft){const value={key:Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join(''),body};pendingStorage().setItem(pendingKey(),JSON.stringify(value));return value;}
+export function forgetPending(){pendingStorage().removeItem(pendingKey());}
 export function submissionStatus(s:Submission){return request<SubmissionStatus>('/service/order-requests/'+s.key+'?'+params(s.body.payer,s.body.client));}
 export async function orderPage(payer:string,client:number,offset:number){
  const d=await request<{payer:string;client:number;count:number;orders:Order[];hasMore?:boolean;nextOffset?:number|null}>('/service/orders?'+params(payer,client)+(offset?'&offset='+offset:''));
