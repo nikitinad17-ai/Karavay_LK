@@ -1,0 +1,9 @@
+.quick-access{position:fixed;right:16px;top:16px;z-index:10000;width:min(410px,calc(100vw - 32px));padding:15px 18px;background:#fff;border:2px solid #ffc928;border-radius:16px;box-shadow:0 8px 36px #172b4d30;color:#183d70;font:14px/1.45 Arial,sans-serif}
+.quick-access summary{cursor:pointer;font-weight:700;list-style:revert}
+.quick-access p{margin:12px 0}
+.quick-access button{display:block;width:100%;margin:10px 0;padding:12px 14px;background:#f3f7fd;border:1px solid #cddbef;border-radius:10px;text-align:left;color:#183d70;cursor:pointer;font:inherit}
+.quick-access button:hover{background:#e6effc}.quick-access button:disabled{opacity:.6;cursor:wait}
+.quick-access strong,.quick-access span,.quick-access small{display:block}
+.quick-access span{font-size:12px;color:#526981;margin:3px 0}.quick-access small{font-size:12px;line-height:1.5}
+.quick-access[open]{max-height:calc(100vh - 40px);overflow:auto}
+@media(max-width:640px){.quick-access{right:10px;top:10px;width:calc(100vw - 20px);padding:12px;box-sizing:border-box}}
