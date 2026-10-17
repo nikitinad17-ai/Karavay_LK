@@ -63,7 +63,7 @@ def verify_point(api, payer, cid, deadline):
             return {'payer': payer, 'point': point, 'order_id': first['id'], 'history_count': len(orders), 'day': day, 'stamp': stamp, 'group': group}
     raise RuntimeError('No dated catalog with prices')
 
-def select(api, saved=None, max_buyers=100, seconds=300, emit=print):
+def select(api, saved=None, max_buyers=10000, seconds=900, emit=print):
     deadline = time.monotonic() + seconds
     if saved and saved.get('history', {}).get('version') == 1:
         result = []

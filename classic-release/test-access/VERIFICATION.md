@@ -102,3 +102,16 @@ No real VM history beyond the confirmed empty recipient 2 is inferred from this.
   refresh/restart, three scopes, logout/mobile, old users/rights retained. PASS.
 - KIS transport in automated tests remains an isolated fixture. New VM buyer
   selection/installation and actual KIS POST have not yet been confirmed.
+
+## Full-directory search — 2026-10-17
+
+- VM screenshot (7): 100 empty payer histories, zero read errors. The former
+  100-buyer cap was reached; this was not the entire directory.
+- Screenshot (8): archived control payer/client histories are empty today and
+  order 48393204 now returns HTTP 400, KIS message «Не найден order». No database
+  reset or absence of all orders is inferred from this.
+- Selection now covers the returned directory (up to 10,000 rows, 900 seconds).
+  Regression fixture places two usable older buyers after 120 empty buyers.
+  Existing fail-closed checks, exclusions, saved-scope checks stay in place. PASS.
+- `npm run check`: strict TS, 31 tests, production build. PASS. Rebuilt PS1 ZIP
+  has verified checksums/Python compilation and the full-directory limit.

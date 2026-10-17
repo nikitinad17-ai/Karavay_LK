@@ -62,6 +62,23 @@ assert not any('/orders?' in path for path in api.calls)
 assert selection.order_rows(FlatOrders(empty=True),'/payers/900003/orders','Id_pay',900003)==[]
 print('PASS: VM-confirmed bare payer history route, flat empty/nonempty arrays, owner-checked wrappers, foreign-owner rejection, three-error stop.')
 
+class WideDirectory(Kis):
+    """Newest 120 buyers have no orders; usable older buyers must still be checked."""
+    def call(self,path,**kw):
+        if path=='/payers':
+            assert kw=={'kis':True};self.calls.append(path)
+            return [{'id':i,'kod':str(i),'name':'Empty','state':1} for i in range(910000,910120)]+[p for p in buyers if p['id'] in (800001,700001)]
+        if path.startswith('/payers/') and 910000<=int(path.split('/')[2])<910120:
+            assert kw=={'kis':True};self.calls.append(path)
+            kid=int(path.split('/')[2])
+            if path.endswith('/orders'):return []
+            return {'id':kid,'kod':str(kid),'name':'Empty','state':1}
+        return super().call(path,**kw)
+api=WideDirectory();chosen=selection.select(api,emit=lambda _:None)
+assert [x['payer']['id'] for x in chosen]==[800001,700001]
+assert sum(p.startswith('/payers/') and p.endswith('/orders') for p in api.calls)==122
+print('PASS: full-directory selection reaches older buyers after more than 100 empty histories.')
+
 seed_spec=importlib.util.spec_from_file_location('seed',HERE.parent/'scripts/Seed-Demo-Users.py');seed=importlib.util.module_from_spec(seed_spec);seed_spec.loader.exec_module(seed)
 class Transport:
     def __init__(self,doc,status=200):self.doc=doc;self.status=status
