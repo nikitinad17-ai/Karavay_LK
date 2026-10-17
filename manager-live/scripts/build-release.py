@@ -10,7 +10,7 @@ import subprocess
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
-NAME='Karavay-Manager-0.8.0-Complete-20261016'
+NAME='Karavay-Manager-0.8.0-Complete-20261017-r1'
 
 def build(output):
     output=Path(output).resolve();output.mkdir(parents=True,exist_ok=True)
@@ -34,12 +34,14 @@ def build(output):
         if subprocess.run(['git','diff','--quiet','HEAD','--','.'],cwd=ROOT).returncode:
             revision+=' (uncommitted changes)'
     except subprocess.CalledProcessError:revision='uncommitted'
-    bootstrap=r'''param([switch]$PreflightOnly)
+    bootstrap=r'''param([switch]$PreflightOnly,[switch]$ResumeSetup)
 $ErrorActionPreference = 'Stop'
-$Install = -not $PreflightOnly
+if ($PreflightOnly -and $ResumeSetup) { throw 'Choose either -PreflightOnly or -ResumeSetup.' }
+$Install = -not ($PreflightOnly -or $ResumeSetup)
 $ConfigureWorkspace = -not $PreflightOnly
 $CopyToVM = $true
-$label = 'Karavay-Manager-0.8.0-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+$runId = 'manager-08-' + [Guid]::NewGuid().ToString('N')
+$label = 'Karavay-Manager-0.8.0-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $runId.Substring($runId.Length - 8)
 $folder = Join-Path (Join-Path $env:USERPROFILE 'Downloads') $label
 New-Item -ItemType Directory -Path $folder | Out-Null
 $bytes = [Convert]::FromBase64String('__PAYLOAD__')

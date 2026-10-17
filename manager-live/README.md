@@ -26,10 +26,10 @@ logout и выход в других вкладках сохранены. Вхо
 
 ## Полная установка из Windows
 
-Сохранить `Karavay-Manager-0.8.0-Complete-20261016.ps1` в обычный Downloads:
+Сохранить `Karavay-Manager-0.8.0-Complete-20261017-r1.ps1` в обычный Downloads:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\Karavay-Manager-0.8.0-Complete-20261016.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\Karavay-Manager-0.8.0-Complete-20261017-r1.ps1"
 ```
 
 Это один файл с пакетом внутри. Сначала проверка совместимости и backup, затем
@@ -58,6 +58,20 @@ DEMO_USERS_READY: 3 ...
 проверяются до/после. Существующие учётные записи и пароли не переустанавливаются.
 
 Для read-only проверки полного PS1 добавить `-PreflightOnly`.
+Если уже получено `MANAGER_RELEASE_INSTALLED: 0.8.0`, а настройка остановилась
+на `Некорректный ID запуска`, повторная установка не нужна:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\Karavay-Manager-0.8.0-Complete-20261017-r1.ps1" -ResumeSetup
+```
+
+Этот режим только передаёт проверенный пакет и запускает настройку под обычным
+оператором. Он не вызывает install.py/sudo и не останавливает PocketBase.
+Перед настройкой проверяется уже установленный менеджер 0.8.0; существующий
+приватный план демо переиспользуется. ID запуска — отдельный GUID без точек.
+Сначала скачивается и проверяется отчёт этого запуска, затем каждый личный файл
+отдельно. Если настройка остановилась до отчёта, личные HTML не скачиваются.
+
 Для загрузчика из GitHub: `scripts/Download-Karavay-Manager.ps1 -SourceRevision
 <полный SHA> -Install -ConfigureWorkspace`. Для повторной настройки без установки:
 тот же загрузчик с `-ConfigureWorkspace` и без `-Install`.
@@ -100,6 +114,7 @@ node manager-live/tests/session.cjs
 python3 manager-live/tests/installer.py
 PB_BINARY=/path/to/pocketbase python3 manager-live/tests/integration.py
 PB_BINARY=/path/to/pocketbase MANAGER_CHROME=/path/to/chrome-headless-shell python3 manager-live/tests/workspace.py
+PWSH=/path/to/pwsh python3 manager-live/tests/powershell.py
 python3 manager-live/scripts/build-release.py /path/to/output
 ```
 
