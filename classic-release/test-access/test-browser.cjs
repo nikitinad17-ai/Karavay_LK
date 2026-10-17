@@ -10,7 +10,8 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
   const account=config.accounts[0];await page.getByRole('button',{name:new RegExp(account.name.replace(/[()]/g,'\\$&'))}).click();
   await page.getByText('Добро пожаловать, '+account.name,{exact:true}).waitFor();
   if(await page.locator('input[type=password]').count())throw Error('Password field visible');
-  await page.waitForFunction(()=>document.querySelector('select[aria-label="Получатель"]')?.value==='2');
+  await page.waitForFunction(cid=>document.querySelector('select[aria-label="Получатель"]')?.value===String(cid),config.point.kid);
+  if(config.history){await page.getByRole('link',{name:'История заказов',exact:true}).click();await page.getByRole('button',{name:'№8008',exact:true}).waitFor();}
   await page.getByRole('link',{name:'Оформить заказ',exact:true}).click();
   await page.getByRole('button',{name:'Показать прайс-лист'}).click();await page.getByText('Хлеб из КИС',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Добавить лоток 1263',exact:true}).click();
@@ -32,7 +33,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
    await page.getByRole('button',{name:new RegExp(config.accounts[i].name.replace(/[()]/g,'\\$&'))}).click();
    await page.getByText('Добро пожаловать, '+config.accounts[i].name,{exact:true}).waitFor();
    if(i===2){await page.getByLabel('Покупатель',{exact:true}).selectOption(config.payers[1].id);await page.waitForFunction(()=>document.querySelectorAll('select[aria-label="Получатель"] option').length===3);}
-   else await page.waitForFunction(()=>document.querySelectorAll('select[aria-label="Получатель"] option').length===3);
+   else {await page.waitForFunction(()=>document.querySelectorAll('select[aria-label="Получатель"] option').length===3);await page.waitForFunction(cid=>document.querySelector('select[aria-label="Получатель"]')?.value===String(cid),config.point.kid);}
    await page.getByRole('button',{name:'Выйти',exact:true}).click();
   }
   await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:new RegExp('Один получатель')}).waitFor();

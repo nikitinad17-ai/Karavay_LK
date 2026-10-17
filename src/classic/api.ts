@@ -8,8 +8,8 @@ export interface Detail {payer:string;client:number;order:Order;items:Item[]|nul
 export interface Options {create:boolean;details:boolean;minimumSum:number|null;minimumSumIncludesVat:boolean|null;reason:string}
 export const CLOSED:Options={create:false,details:false,minimumSum:null,minimumSumIncludesVat:null,reason:'Отправка заказа ещё не подключена.'};
 const KEY='karavay_classic_session_v1';
-export interface TestAccount {id:string;name:string;email:string;description:string}
-interface Session {token:string;id:string;email:string;test?:boolean}
+export interface TestAccount {id:string;name:string;email:string;description:string;preferredPayer?:string;preferredClient?:number;preferredDate?:string;preferredGroup?:number}
+interface Session {token:string;id:string;email:string;test?:boolean;preferredPayer?:string;preferredClient?:number;preferredDate?:string;preferredGroup?:number}
 let session:Session|null=null;
 export const getSession=()=>session;
 export function clearSession(){session=null;for(const storage of [sessionStorage,localStorage])try{storage.removeItem(KEY);}catch{}}
@@ -36,15 +36,15 @@ export async function request<T>(path:string,options:RequestInit={}):Promise<T>{
     const d=await r.json();if(!r.ok){if(r.status===401)clearSession();throw new ApiError(r.status,typeof d.code==='string'?d.code:'REQUEST_FAILED');}return d as T;
   }finally{clearTimeout(timer);options.signal?.removeEventListener('abort',abort);}
 }
-function accept(d:{token:string;record:{id:string;email:string;active:boolean;must_change_password:boolean}},test=false){
+function accept(d:{token:string;record:{id:string;email:string;active:boolean;must_change_password:boolean}},test=false,account?:TestAccount){
   if(!d.token||!/^\w{15}$/.test(d.record?.id)||d.record.active!==true)throw new ApiError(403,'INVALID_ACCOUNT');
-  session={token:d.token,id:d.record.id,email:d.record.email,...(test?{test:true}:{})};try{(test?localStorage:sessionStorage).setItem(KEY,JSON.stringify(session));}catch{}
+  session={token:d.token,id:d.record.id,email:d.record.email,...(test?{test:true,preferredPayer:account?.preferredPayer,preferredClient:account?.preferredClient,preferredDate:account?.preferredDate,preferredGroup:account?.preferredGroup}:{})};try{(test?localStorage:sessionStorage).setItem(KEY,JSON.stringify(session));}catch{}
   return d.record.must_change_password===true;
 }
 export async function login(email:string,password:string){clearSession();return accept(await request('/api/collections/users/auth-with-password',{method:'POST',body:JSON.stringify({identity:email,password})}));}
-export async function testAccounts(){const d=await request<{environment:string;accounts:TestAccount[]}>('/service/test-access');if(d.environment!=='test-kis'||!Array.isArray(d.accounts)||d.accounts.length>3||d.accounts.some(a=>!/^[a-z0-9]{15}$/.test(a.id)||[a.name,a.email,a.description].some(s=>typeof s!=='string')))throw new ApiError(502,'INVALID_TEST_ACCESS');return d.accounts;}
-export async function testLogin(id:string){if(!/^[a-z0-9]{15}$/.test(id))throw new Error('Invalid test account');clearSession();const d=await request<Parameters<typeof accept>[0]>('/service/test-access',{method:'POST',body:JSON.stringify({id})});if(d.record.id!==id||d.record.must_change_password===true)throw new ApiError(403,'INVALID_ACCOUNT');return accept(d,true);}
-export async function restore(){try{const stored:Session|null=JSON.parse(sessionStorage.getItem(KEY)||localStorage.getItem(KEY)||'null');if(!stored?.token||!stored?.id)return null;session=stored;if(stored.test&&!(await testAccounts()).some(a=>a.id===stored.id))throw new ApiError(403,'ACCESS_DENIED');const d=await request<Parameters<typeof accept>[0]>('/api/collections/users/auth-refresh',{method:'POST'});if(d.record.id!==stored.id)throw new ApiError(403,'ACCOUNT_CHANGED');return accept(d,stored.test===true);}catch(e){clearSession();throw e;}}
+export async function testAccounts(){const d=await request<{environment:string;accounts:TestAccount[]}>('/service/test-access');if(d.environment!=='test-kis'||!Array.isArray(d.accounts)||d.accounts.length>3||d.accounts.some(a=>!/^[a-z0-9]{15}$/.test(a.id)||[a.name,a.email,a.description].some(s=>typeof s!=='string')||(a.preferredPayer!==undefined&&!/^[a-z0-9]{15}$/.test(a.preferredPayer))||(a.preferredClient!==undefined&&!validId(a.preferredClient))||(a.preferredDate!==undefined&&!/^\d{4}-\d{2}-\d{2}$/.test(a.preferredDate))||(a.preferredGroup!==undefined&&![0,1].includes(a.preferredGroup))))throw new ApiError(502,'INVALID_TEST_ACCESS');return d.accounts;}
+export async function testLogin(id:string){if(!/^[a-z0-9]{15}$/.test(id))throw new Error('Invalid test account');clearSession();const account=(await testAccounts()).find(a=>a.id===id);if(!account)throw new ApiError(403,'ACCESS_DENIED');const d=await request<Parameters<typeof accept>[0]>('/service/test-access',{method:'POST',body:JSON.stringify({id})});if(d.record.id!==id||d.record.must_change_password===true)throw new ApiError(403,'INVALID_ACCOUNT');return accept(d,true,account);}
+export async function restore(){try{const stored:Session|null=JSON.parse(sessionStorage.getItem(KEY)||localStorage.getItem(KEY)||'null');if(!stored?.token||!stored?.id)return null;session=stored;const account=stored.test?(await testAccounts()).find(a=>a.id===stored.id):undefined;if(stored.test&&!account)throw new ApiError(403,'ACCESS_DENIED');const d=await request<Parameters<typeof accept>[0]>('/api/collections/users/auth-refresh',{method:'POST'});if(d.record.id!==stored.id)throw new ApiError(403,'ACCOUNT_CHANGED');return accept(d,stored.test===true,account);}catch(e){clearSession();throw e;}}
 export async function changePassword(oldPassword:string,password:string){if(!session)throw new ApiError(401,'AUTH_REQUIRED');await request('/service/account/change-password',{method:'POST',body:JSON.stringify({oldPassword,password})});clearSession();}
 export function validId(n:unknown):n is number{return typeof n==='number'&&Number.isSafeInteger(n)&&n>0;}
 export function params(payer:string,client:number){if(!/^[a-z0-9]{15}$/.test(payer)||!validId(client))throw new Error('Invalid context');return 'payer='+payer+'&client='+client;}

@@ -54,3 +54,20 @@ recipient lookup, upstream errors distinct from empty results, existing history
 detection, report creation, token exclusion, and GET-only business traffic. PASS.
 Windows PowerShell 5.1 was not available; script uses its supported syntax.
 No real VM history beyond the confirmed empty recipient 2 is inferred from this.
+
+## 3.8.2 — 2026-10-17
+
+- Selection fixture: omitted state in directory, real payer-card state check,
+  banned/empty/foreign buyers excluded; history headers/lines/matrix required;
+  saved scenarios revalidated; all-empty response blocks installation. PASS.
+- `npm run check`: strict TypeScript, 31 tests including preferred recipient
+  (non-first in list), persisted preference and session, production build: PASS.
+- Real PB 0.40.3 + Chromium, upgrade from 3.8.1 in SAME DB to v382 accounts:
+  pre-existing users/rights/payers/clients byte-for-byte JSON unchanged; existing
+  history visible BEFORE creating an order; default point with history, catalog,
+  cart/review/one POST, details/history, F5 and browser restart, all three scopes,
+  logout/mobile, disabled guard, rerun, actual deployment checks and rollback. PASS.
+- Legacy 3.8.1 config/session/browser scenario with new helper/client: PASS.
+- KIS in these tests is a fixture. Real VM selection/install 3.8.2 and real KIS
+  POST remain unverified. VM screenshot shows 40 checked recipients, no history;
+  it does not prove no orders exist for other buyers/recipients.

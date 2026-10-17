@@ -36,6 +36,8 @@ with tempfile.TemporaryDirectory(prefix='karavay-test-access-') as temp:
             points.append(point); docs['/clients/' + str(cid)] = point
         docs['/payers/' + str(kid) + '/clients'] = points
     (d / 'kis.json').write_text(json.dumps(docs))
+    history_mode = bool(os.environ.get('HISTORY_SELECTION'))
+    if history_mode: (d / 'history-mode').write_text('yes')
     (d / 'bin/curl').write_text('''#!/usr/bin/env python3
 import datetime,json,pathlib,sys
 root=pathlib.Path(__file__).resolve().parents[1]
@@ -45,13 +47,17 @@ last=root/'last.json'
 if '--data-raw' in sys.argv:
  assert p=='/orders' and not any('Authorization' in x for x in sys.argv)
  body=json.loads(sys.argv[sys.argv.index('--data-raw')+1]);assert set(body)=={'Id_clt','DateOrd','Product'}
- assert body['Id_clt']==2 and body['Product']==[{'Id_prd':66,'KolSht':8}]
+ assert body['Id_clt']==(234243 if (root/'history-mode').exists() else 2) and body['Product']==[{'Id_prd':66,'KolSht':8}]
  assert not last.exists(),'duplicate KIS POST'
  last.write_text(json.dumps(body));data={'Id_ord':7};status=201
 elif '/matrix?' in p:data=[{'id_prd':66,'kod_prod':'1263','nameprod':'Хлеб из КИС','vesprod':.5,'srok':72,'kolukl':8,'cenaotp':34.9,'basecenaotp':40,'procskd':0,'kolshtordmin':4}]
-elif p.endswith('/orders'):data=[{'id':7}] if last.exists() else []
+elif p.endswith('/orders'):
+ cid=int(p.split('/')[2]);data=([{'id':8 if cid==234243 else 9}] if (root/'history-mode').exists() and cid in (234243,384786) else [])
+ if last.exists() and cid==json.loads(last.read_text())['Id_clt']:data=[{'id':7}]+data
+elif p in ('/orders/8','/orders/9'):
+ oid=int(p.split('/')[-1]);data={'id':oid,'client_id':234243 if oid==8 else 384786,'order_number':8000+oid,'order_date':'2026-10-01T00:00:00','kol_sht':8,'sum_all':279.2,'state':0,'products':[{'id':66,'product_kod':'1263','product_name':'Existing KIS bread','kol_sht':8,'cena_otp':34.9,'sum_all':279.2}]}
 elif p=='/orders/7':
- b=json.loads(last.read_text());data={'id':7,'client_id':2,'order_number':948,'order_date':datetime.datetime.fromtimestamp(b['DateOrd']+10800,datetime.timezone.utc).strftime('%Y-%m-%dT00:00:00'),'create_date':b['DateOrd'],'kol_sht':8,'sum_all':279.2,'state':0,'products':[{'id':66,'product_kod':'1263','product_name':'Хлеб из КИС','kol_sht':8,'cena_otp':34.9,'sum_all':279.2}]}
+ b=json.loads(last.read_text());data={'id':7,'client_id':b['Id_clt'],'order_number':948,'order_date':datetime.datetime.fromtimestamp(b['DateOrd']+10800,datetime.timezone.utc).strftime('%Y-%m-%dT00:00:00'),'create_date':b['DateOrd'],'kol_sht':8,'sum_all':279.2,'state':0,'products':[{'id':66,'product_kod':'1263','product_name':'Хлеб из КИС','kol_sht':8,'cena_otp':34.9,'sum_all':279.2}]}
 else:data=docs[p]
 print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status))
 ''')
@@ -83,7 +89,19 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             class Kis:
                 def call(self, path, **kw):
                     assert kw == {'kis':True}; return docs[path]
-            config = setup.plan(d, Kis())
+            chosen = None
+            if history_mode:
+                # Upgrade from the previous version in the SAME database.
+                previous_config = setup.plan(d, Kis())
+                proc.terminate(); proc.wait(timeout=10)
+                (d / 'pb_data/karavay-test-access.json').write_text(json.dumps(previous_config))
+                shutil.copy2(HERE / setup.MIGRATION, d / 'pb_migrations')
+                proc = start()
+                old_snapshot = {c:call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] for c in ('users','rights','payers','clients')}
+                tomorrow = (int(time.time()+10800)//86400+1)*86400-10800
+                chosen = [{'payer':docs['/payers/'+str(k)],'point':docs['/clients/'+str(cid)],'order_id':oid,'history_count':1,'day':__import__('datetime').datetime.fromtimestamp(tomorrow+10800,__import__('datetime').timezone.utc).strftime('%Y-%m-%d'),'stamp':tomorrow,'group':1} for k,cid,oid in [(2,234243,8),(3,384786,9)]]
+                setup.MIGRATION = '1792260000_test_history_users.js'
+            config = setup.plan(d, Kis(), chosen)
             assert config['managerOwner'] == manager
             proc.terminate(); proc.wait(timeout=10)
             (d / 'pb_data/karavay-test-access.json').write_text(json.dumps(config))
@@ -91,6 +109,10 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             proc = start()
             accounts = call('/service/test-access')['accounts']
             assert len(accounts) == 3
+            if history_mode:
+                for c, values in old_snapshot.items():
+                    current = {r['id']:r for r in call('/api/collections/'+c+'/records?perPage=200', token=admin)['items']}
+                    assert all(current[v['id']]==v for v in values), 'Existing records changed: '+c
             assert password not in json.dumps(accounts) and all('password' not in a for a in accounts)
             call('/service/test-access', {'id':manager}, expected=403)
             call('/service/test-access', {'id':accounts[0]['id'], 'email':'x'}, expected=400)
@@ -100,9 +122,9 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             assert call('/api/collections/users/auth-refresh', {}, token)['record']['id'] == accounts[0]['id']
             p1, p2 = [p['id'] for p in config['payers']]
             assert len(call('/service/context', token=token)['payers']) == 1
-            assert [c['id'] for c in call('/service/clients?payer='+p1+'&perPage=20', token=token)['clients']] == [2]
+            assert [c['id'] for c in call('/service/clients?payer='+p1+'&perPage=20', token=token)['clients']] == [config['point']['kid']]
             call('/service/clients?payer='+p2+'&perPage=20', token=token, expected=403)
-            call('/service/order-options?payer='+p1+'&client=234243', token=token, expected=403)
+            call('/service/order-options?payer='+p1+'&client='+str(2 if history_mode else 234243), token=token, expected=403)
             for i, a in enumerate(accounts):
                 t = call('/service/test-access', {'id':a['id']})['token']
                 assert len(call('/service/context', token=t)['payers']) == (2 if i == 2 else 1)
@@ -118,7 +140,7 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
                 call('/api/collections/'+collection+'/records/'+rid, {field:not off}, admin, 'PATCH')
             # Reboot and installer repeat preserve users, passwords and rights.
             before = {c:call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] for c in ('users','rights','payers','clients')}
-            assert setup.plan(d, Kis()) == config
+            assert setup.plan(d, Kis(), chosen) == config
             proc.terminate(); proc.wait(timeout=10); proc = start()
             after = {c:call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] for c in before}
             assert before == after

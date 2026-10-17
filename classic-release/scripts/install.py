@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Client 3.8.1 installation. Existing user/manager data are preserved.
+"""Client 3.8.2 installation. Existing user/manager data are preserved.
 Adds one private order journal. Rollback restores application files, not business data.
 """
 import argparse,datetime,hashlib,json,os,pathlib,shutil,sqlite3,subprocess,time,urllib.request,urllib.error
@@ -52,11 +52,11 @@ def main():
   actual={f['name']:f['type'] for f in definitions.get(collection,[])}
   for name,kind in fields.items():
    if actual.get(name)!=kind:raise RuntimeError('Schema mismatch: '+collection+'.'+name)
- pending=[p.name for p in (root/'pb_migrations').glob('*.js') if p.name not in applied and p.name not in ('1792000000_classic_order_requests.js','1792180000_test_access_users.js')]
+ pending=[p.name for p in (root/'pb_migrations').glob('*.js') if p.name not in applied and p.name not in ('1792000000_classic_order_requests.js','1792180000_test_access_users.js','1792260000_test_history_users.js')]
  if pending:raise RuntimeError('Other pending migrations need review: '+', '.join(pending))
  if 'lk_order_requests' in definitions and '1792000000_classic_order_requests.js' not in applied:raise RuntimeError('Unrecognized existing order journal')
  run('systemctl','is-active','pocketbase')
- print('PREFLIGHT_OK: client and gateway match; new private journal only; manager preserved.')
+ print('PREFLIGHT_OK: client, gateway and schema match; manager preserved.')
  if not args.apply:return
  if os.geteuid()!=0:raise RuntimeError('Run --apply through sudo')
  backup=pathlib.Path('/opt')/('.karavay-classic-before-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S'));backup.mkdir(mode=0o700)
@@ -89,7 +89,7 @@ def main():
   if changed:restore(root,backup)
   run('systemctl','start','pocketbase')
   raise
- print('CLASSIC_3.8.1_INSTALLED: http://192.168.25.98:8090/')
+ print('CLASSIC_3.8.2_INSTALLED: http://192.168.25.98:8090/')
  print('BACKUP:',backup)
  print('Rollback: sudo python3 '+str(SOURCE/'scripts/install.py')+' --rollback '+str(backup))
  print('No KIS order was created by installation. Real POST still requires a user submission; OpenAPI/previous aId_Clt mismatch may remain on the KIS server.')

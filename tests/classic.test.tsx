@@ -22,15 +22,18 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();api.clearSes
 async function signIn(){render(<App/>);await screen.findByLabelText('Email');fireEvent.change(screen.getByLabelText('Email'),{target:{value:'demo@karavay.example'}});fireEvent.change(screen.getByLabelText('Пароль'),{target:{value:'test-only-password'}});fireEvent.click(screen.getByRole('button',{name:'Войти'}));await screen.findByText('Добро пожаловать, Покупатель (демо)');fireEvent.change(screen.getByLabelText('Покупатель'),{target:{value:p1}});await waitFor(()=>expect((screen.getByLabelText('Получатель') as HTMLSelectElement).value).toBe('11'));}
 describe('Classic service mode',()=>{
  it('offers test buttons without password fields and restores the account across browser sessions',async()=>{
-  const account={id:'uuuuuuuuuuuuuuu',name:'Один получатель (тест)',email:'demo.test.point@example.test',description:'Каравай · получатель из КИС'};
+  const account={id:'uuuuuuuuuuuuuuu',name:'Один получатель (тест)',email:'demo.test.point@example.test',description:'Каравай · получатель из КИС',preferredPayer:p1,preferredClient:11,preferredDate:'2026-10-18',preferredGroup:1};
   vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
    const path=String(input);
    if(path==='/service/test-access'&&init?.method!=='POST')return response({environment:'test-kis',accounts:[account]});
    if(path==='/service/test-access'||path.endsWith('/auth-refresh'))return response({token:'test-session',record:{...account,active:true,must_change_password:false}});
+   if(path.startsWith('/service/clients')&&path.includes(p1))return response({payer:p1,clients:[{id:12,code:'EMPTY',name:'Empty first client',address:''},{id:11,code:'HISTORY',name:'Client with history',address:''}],count:2,hasMore:false,nextCursor:null});
    return mockFetch(input,init);
   }));
   render(<App/>);fireEvent.click(await screen.findByRole('button',{name:/Один получатель/}));
   await screen.findByText('Добро пожаловать, Покупатель (демо)');expect(screen.queryByLabelText('Пароль')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Покупатель'),{target:{value:p1}});await waitFor(()=>expect(screen.getByLabelText('Получатель')).toHaveValue('11'));
+  expect(api.getSession()?.preferredDate).toBe('2026-10-18');
   const body:api.OrderDraft={payer:p1,client:11,DateOrd:api.timestamp('2026-10-16'),Group:1,products:[{id:66,quantity:8,price:34.9}]};
   const pending=api.savePending(body);cleanup();sessionStorage.clear();
   render(<App/>);await screen.findByText('Добро пожаловать, Покупатель (демо)');expect(api.getSession()?.test).toBe(true);expect(api.pending()?.key).toBe(pending.key);
