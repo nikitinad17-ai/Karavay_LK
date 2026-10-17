@@ -1,4 +1,4 @@
-import importlib.util, pathlib
+import importlib.util, io, json, pathlib, urllib.error
 HERE=pathlib.Path(__file__).resolve().parent
 spec=importlib.util.spec_from_file_location('selection',HERE/'select-history.py');selection=importlib.util.module_from_spec(spec);spec.loader.exec_module(selection)
 buyers=[{'id':i,'kod':str(i),'name':name,'state':1} for i,name in [(900005,'НЕВА'),(900004,'ПРОМТЕХСБЫТ'),(900003,'Empty'),(900002,'Foreign'),(800001,'Real A'),(700001,'Real B')]]
@@ -10,7 +10,8 @@ class Kis:
         if path.startswith('/payers/'):
             kid=int(path.split('/')[2]);p=next(p for p in buyers if p['id']==kid)
             if '/orders?' in path:
-                assert ('?Id_pay='+str(kid)+'&offset=0&limit=5') in path
+                raise RuntimeError('HTTP 400: query attributes do not belong to order')
+            if path.endswith('/orders'):
                 return {'Id_pay':kid,'Orders':[] if self.empty or kid==900003 else [{'id':kid+1}]}
             if path.endswith('/clients'):return [self.point(kid)]
             return p
@@ -37,17 +38,47 @@ print('PASS: selection skips banned/empty/foreign buyers, verifies history+detai
 class BadOwner(Kis):
     def call(self,path,**kw):
         value=super().call(path,**kw)
-        if '/orders?' in path:value['Id_pay']=1
+        if path.startswith('/payers/') and path.endswith('/orders'):value['Id_pay']=1
         return value
 try:selection.select(BadOwner(),emit=lambda _:None);raise AssertionError('Foreign owner wrapper accepted')
 except RuntimeError as e:assert 'HISTORY_SCENARIOS_NOT_FOUND' in str(e)
-class BadQuery(Kis):
+class BrokenRoute(Kis):
     def call(self,path,**kw):
-        if '/orders?' in path:
+        if path.startswith('/payers/') and path.endswith('/orders'):
             self.calls.append(path)
             raise RuntimeError('HTTP 400 at documented order route')
         return super().call(path,**kw)
-api=BadQuery()
+api=BrokenRoute()
 try:selection.select(api,emit=lambda _:None);raise AssertionError('Expected contract failure')
-except RuntimeError:assert sum('/orders?' in p for p in api.calls)==3
-print('PASS: exact captured OpenAPI Id_pay/Orders and id_clt/Orders wrappers, explicit query Id_pay, foreign-owner rejection, three-error stop.')
+except RuntimeError:assert sum(p.startswith('/payers/') and p.endswith('/orders') for p in api.calls)==3
+class FlatOrders(Kis):
+    def call(self,path,**kw):
+        value=super().call(path,**kw)
+        if path.endswith('/orders'):return value['Orders']
+        return value
+api=FlatOrders();chosen=selection.select(api,emit=lambda _:None)
+assert [x['payer']['id'] for x in chosen]==[800001,700001]
+assert not any('/orders?' in path for path in api.calls)
+assert selection.order_rows(FlatOrders(empty=True),'/payers/900003/orders','Id_pay',900003)==[]
+print('PASS: VM-confirmed bare payer history route, flat empty/nonempty arrays, owner-checked wrappers, foreign-owner rejection, three-error stop.')
+
+seed_spec=importlib.util.spec_from_file_location('seed',HERE.parent/'scripts/Seed-Demo-Users.py');seed=importlib.util.module_from_spec(seed_spec);seed_spec.loader.exec_module(seed)
+class Transport:
+    def __init__(self,doc,status=200):self.doc=doc;self.status=status
+    def open(self,request,timeout):
+        assert request.get_method()=='GET' and not request.has_header('Authorization')
+        assert '?' not in request.full_url
+        raw=io.BytesIO(json.dumps(self.doc).encode())
+        if self.status>=400:raise urllib.error.HTTPError(request.full_url,self.status,'Bad Request',{},raw)
+        return raw
+api=seed.Api();api.token='local-pb-token-never-forwarded';api.opener=Transport({'success':True,'data':[]})
+assert api.call('/payers/428125/orders',kis=True)==[]
+api.opener=Transport({'success':False,'error':{'message':'Attribute id_pay\r\n does not belong to order','details':'private-oracle-stack'}},400)
+try:api.call('/payers/428125/orders',kis=True);raise AssertionError('HTTP error swallowed')
+except seed.Failure as e:
+    assert 'HTTP 400' in str(e) and 'KIS: Attribute id_pay does not belong to order' in str(e)
+    assert 'private-oracle-stack' not in str(e) and 'local-pb-token' not in str(e) and 'Повторите' not in str(e)
+api.opener=Transport({'success':False,'error':'invalid-shape'},500)
+try:api.call('/payers/428125/orders',kis=True);raise AssertionError('HTTP error swallowed')
+except seed.Failure as e:assert str(e)=='HTTP 500 при /payers/428125/orders'
+print('PASS: captured HTTP 200 empty JSON through actual KIS reader; upstream HTTP error message retained, SQL details/auth token excluded.')

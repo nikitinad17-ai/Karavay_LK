@@ -85,3 +85,20 @@ No real VM history beyond the confirmed empty recipient 2 is inferred from this.
 - First 3.8.2 VM attempt: 100 read/contract errors, zero empty buyer histories;
   no deployed files/users changed. Exact first error not visible in screenshot.
 - Corrected build still needs VM verification. No actual KIS POST verified.
+
+## KIS-Read — 2026-10-17, actual VM validator evidence
+
+- User screenshot (4): payer history with Id_pay/offset/limit query attributes
+  fails HTTP 400 / -20001: attributes do not belong to order. Screenshot (6):
+  bare `/payers/428125/orders` succeeds HTTP 200 with success=true, data=[].
+  This confirms one empty buyer history, not an empty entire KIS.
+- Removed all query attributes from payer history selection. Fixtures reject
+  them and cover flat empty/nonempty and owner-checked wrapped lists. PASS.
+- Actual Api reader processes captured empty response and preserves upstream
+  error.message on HTTP failure without Oracle stack/details or PB token. PASS.
+- `npm run check`: strict TS, 31 tests, production build. PASS.
+- PB 0.40.3 + Chromium upgrade/browser/deployment/rollback suite: passwordless
+  entry, existing history, catalog/cart/review/fixture POST/history/details,
+  refresh/restart, three scopes, logout/mobile, old users/rights retained. PASS.
+- KIS transport in automated tests remains an isolated fixture. New VM buyer
+  selection/installation and actual KIS POST have not yet been confirmed.

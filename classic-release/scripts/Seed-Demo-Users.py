@@ -48,6 +48,16 @@ class Api:
                 return doc['data']
             return doc
         except urllib.error.HTTPError as error:
+            if kis:
+                message = ''
+                try:
+                    doc = json.loads(error.read(65537).decode('utf-8-sig'))
+                    detail = doc.get('error') if isinstance(doc, dict) else None
+                    if isinstance(detail, dict) and isinstance(detail.get('message'), str):
+                        message = ' | KIS: ' + ' '.join(detail['message'].split())[:1200]
+                except (ValueError, UnicodeError, OSError):
+                    pass
+                raise Failure('HTTP ' + str(error.code) + ' при ' + path.split('?')[0] + message) from None
             raise Failure('HTTP ' + str(error.code) + ' при ' + path.split('?')[0] + '. Повторите тот же запуск: сохранённый план предотвратит дубли.') from None
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, UnicodeError):
             raise Failure('Нет корректного ответа. Повторите тот же запуск; пароли не сохранялись.') from None

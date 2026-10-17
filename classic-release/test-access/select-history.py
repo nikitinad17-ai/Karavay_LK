@@ -84,7 +84,8 @@ def select(api, saved=None, max_buyers=100, seconds=300, emit=print):
             pid = p['id']
             p = api.call('/payers/' + str(pid), kis=True)
             if not isinstance(p, dict) or p.get('id') != pid or not eligible(p): continue
-            recent = order_rows(api, '/payers/' + str(p['id']) + '/orders?Id_pay=' + str(p['id']) + '&offset=0&limit=5', 'Id_pay', p['id'])
+            # VM-confirmed route: query attributes are rejected by the KIS validator.
+            recent = order_rows(api, '/payers/' + str(p['id']) + '/orders', 'Id_pay', p['id'])
             if not recent: empty += 1
             tried = set()
             for row in recent[:5]:
@@ -99,14 +100,14 @@ def select(api, saved=None, max_buyers=100, seconds=300, emit=print):
                 try: chosen = verify_point(api, p, cid, deadline)
                 except Exception as error:
                     errors += 1
-                    if errors <= 3: emit('HISTORY_READ_ERROR: ' + str(error)[:200])
+                    if errors <= 3: emit('HISTORY_READ_ERROR: ' + str(error)[:1400])
                     continue
                 result.append(chosen)
                 emit('HISTORY_BUYER_VERIFIED: KIS ' + str(p['id']) + ' | client ' + str(cid) + ' | orders ' + str(chosen['history_count']))
                 break
         except Exception as error:
             errors += 1
-            if errors <= 3: emit('HISTORY_READ_ERROR: ' + str(error)[:200])
+            if errors <= 3: emit('HISTORY_READ_ERROR: ' + str(error)[:1400])
             signature = re.sub(r'\d+', '#', str(error))
             repeated[signature] = repeated.get(signature, 0) + 1
             if repeated[signature] >= 3: break
