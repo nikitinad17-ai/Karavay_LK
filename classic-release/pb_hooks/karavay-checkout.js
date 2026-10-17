@@ -93,6 +93,11 @@ function create(e){
     const p=byId.get(line.id);if(!p)fail(409,'PRODUCT_UNAVAILABLE');
     if(!number(p.cenaotp)||p.cenaotp!==line.price)fail(409,'PRICE_CHANGED');
     if(p.kolshtordmin!=null&&(!Number.isSafeInteger(p.kolshtordmin)||p.kolshtordmin<0))fail(502,'INVALID_MATRIX');
+    // Empty minimum means full trays only; KolSht sent to KIS is always pieces.
+    if(p.kolshtordmin==null){
+      if(!id(p.kolukl))fail(502,'INVALID_MATRIX');
+      if(line.quantity%p.kolukl!==0)fail(400,'LOT_MULTIPLE');
+    }
     if(p.kolshtordmin!=null&&line.quantity<p.kolshtordmin)fail(400,'MINIMUM_QUANTITY');
   }
   // One short DB transaction claims a durable intent; network I/O is outside the transaction.

@@ -115,3 +115,22 @@ No real VM history beyond the confirmed empty recipient 2 is inferred from this.
   Existing fail-closed checks, exclusions, saved-scope checks stay in place. PASS.
 - `npm run check`: strict TS, 31 tests, production build. PASS. Rebuilt PS1 ZIP
   has verified checksums/Python compilation and the full-directory limit.
+
+## Whole-tray regression — 2026-10-17
+
+- Confirmed original rule in utils/orderRules: null KolshtOrdmin means lotOnly;
+  KolUkl is pieces per tray. Classic migration omitted this rule in UI/backend.
+- Restored absent piece input, whole-tray validation, and refusal to guess
+  missing packing. Nonempty minimum retains mixed trays/pieces. No rounding of
+  historical quantities. `npm run check`: strict TS, 34 tests/build. PASS.
+- Real PB checkout: 15 pieces with packing 8 rejected before KIS POST/journal;
+  invalid/missing packing rejected; 24 pieces accepted as exact KolSht=24. PASS.
+- Real Chromium desktop/mobile checks lot-only and piece-allowed inputs, then
+  existing full checkout/session/scope/browser-restart flow. PASS with fixture KIS.
+- Actual core installer main/apply also exercised on isolated PB: auth gates,
+  served HTML, journal privacy, current test config and existing records retained.
+  `-ClientOnly` dispatches to this installer, bypassing new-user/history selection.
+- Browser/deployment suite passes with BOTH existing 3.8.1 and new history-based
+  3.8.2 configurations. Native PowerShell executes/decompresses/checks the actual
+  wrapper in both modes with SSH/SCP/browser mocked; correct dispatch verified.
+- No VM deployment or actual KIS POST is claimed by these fixture tests.

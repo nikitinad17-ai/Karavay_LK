@@ -33,7 +33,9 @@ elif p=='/payers/300182':data={'id':300182,'kod':'A120','name':'Payer A','state'
 elif p=='/payers/299271':data={'id':299271,'kod':'A016','name':'Payer B','state':1}
 elif p=='/payers/300182/clients':data=[{'id':300183,'kod':'A12000','name':'Recipient A'}]
 elif p=='/payers/299271/clients':data=[{'id':299300,'kod':'A01600','name':'Recipient B'}]
-elif p.startswith('/clients/300183/matrix?'):data=[{'id_prd':425162,'cenaotp':61.16,'kolshtordmin':5}]
+elif p.startswith('/clients/300183/matrix?'):
+ data=[{'id_prd':425162,'cenaotp':61.16,'kolshtordmin':5}]
+ if (root/'lot-only').exists():data[0].update(kolshtordmin=None,kolukl=json.loads((root/'lot-only').read_text()))
 elif p=='/clients/300183/orders':data=[{'id':7}]
 elif p=='/orders/7':
  data={'id':7,'client_id':300183,'order_number':948,'order_date':'2026-10-03T00:00:00','kol_sht':15,'sum_all':917.4,'create_date':'2026-10-02T14:17:34','state':0,'products':[{'id':425162,'product_kod':'7485','product_name':'Хлеб из КИС','cena_otp':61.16,'kol_sht':15,'kol_vzv':0,'sum_all':917.4}],'private_field':'must not leave server'}
@@ -77,6 +79,14 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             for updates,code in [({'price':1},'PRICE_CHANGED'),({'quantity':1},'MINIMUM_QUANTITY'),({'id':1},'PRODUCT_UNAVAILABLE')]:
                 b={**body,'products':[{**body['products'][0],**updates}]};assert post(b,expected=400 if code=='MINIMUM_QUANTITY' else 409)['code']==code
             assert count()==0
+            (d/'lot-only').write_text('8')
+            assert post(expected=400)['code']=='LOT_MULTIPLE'  # 15 pieces is not a whole tray.
+            for bad_packing in ('null','0','2.5','-8'):
+                (d/'lot-only').write_text(bad_packing)
+                assert post(expected=502)['code']=='INVALID_MATRIX'
+            (d/'lot-only').unlink()
+            assert count()==0
+            assert request('/api/collections/lk_order_requests/records?perPage=1',token=admin)['totalItems']==0
             request('/api/collections/users/records/'+u,{'role_code':'viewer','role':viewer},admin,'PATCH');post(expected=403);assert count()==0
             request('/api/collections/users/records/'+u,{'role_code':'owner','role':role},admin,'PATCH')
             key=secrets.token_hex(16);assert post(key=key)['id']==7;assert count()==1;assert post(key=key)['id']==7;assert count()==1
@@ -103,6 +113,11 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             with concurrent.futures.ThreadPoolExecutor(2) as pool:
                 a=pool.submit(post,b,secrets.token_hex(16));time.sleep(.1);c=pool.submit(post,b,secrets.token_hex(16),409);a.result();c.result()
             assert count()==before+1
+            (d/'lot-only').write_text('8');before=count()
+            b={**body,'products':[{**body['products'][0],'quantity':24}]}
+            post(b);assert count()==before+1
+            assert json.loads((d/'last.json').read_text())['Product']==[{'Id_prd':425162,'KolSht':24}]
+            (d/'lot-only').unlink()
             request('/api/collections/roles/records/'+role,{'active':False},admin,'PATCH');request('/service/order-options'+q,token=token,expected=403)
             request('/api/collections/roles/records/'+role,{'active':True},admin,'PATCH')
             request('/api/collections/rights/records/'+rid,{'active':False},admin,'PATCH');request('/service/orders/7'+q,token=token,expected=403)

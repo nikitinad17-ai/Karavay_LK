@@ -1,5 +1,5 @@
 """Real PB 0.40.3 and real client; KIS transport is an isolated fixture, never the VM."""
-import importlib.util, json, os, pathlib, secrets, shutil, subprocess, tempfile, time, urllib.error, urllib.request
+import hashlib, importlib.util, json, os, pathlib, secrets, shutil, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -50,7 +50,7 @@ if '--data-raw' in sys.argv:
  assert body['Id_clt']==(234243 if (root/'history-mode').exists() else 2) and body['Product']==[{'Id_prd':66,'KolSht':8}]
  assert not last.exists(),'duplicate KIS POST'
  last.write_text(json.dumps(body));data={'Id_ord':7};status=201
-elif '/matrix?' in p:data=[{'id_prd':66,'kod_prod':'1263','nameprod':'Хлеб из КИС','vesprod':.5,'srok':72,'kolukl':8,'cenaotp':34.9,'basecenaotp':40,'procskd':0,'kolshtordmin':4}]
+elif '/matrix?' in p:data=[{'id_prd':66,'kod_prod':'1263','nameprod':'Хлеб из КИС','vesprod':.5,'srok':72,'kolukl':8,'cenaotp':34.9,'basecenaotp':40,'procskd':0,'kolshtordmin':4},{'id_prd':67,'kod_prod':'LOT8','nameprod':'Только лотками из КИС','kolukl':8,'cenaotp':30,'kolshtordmin':None}]
 elif p.endswith('/orders'):
  cid=int(p.split('/')[2]);data=([{'id':8 if cid==234243 else 9}] if (root/'history-mode').exists() and cid in (234243,384786) else [])
  if last.exists() and cid==json.loads(last.read_text())['Id_clt']:data=[{'id':7}]+data
@@ -184,6 +184,36 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
                 for c in before:
                     assert call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] == before[c]
                 print('PASS: actual installer deploy, verification and failed-update rollback; prior HTML, users, rights and accepted order retained.')
+                # ClientOnly dispatch uses this unchanged core installer. Exercise its
+                # real main/apply path; substitute only VM paths, URL and systemctl.
+                (d / 'pb_public/index.html').write_bytes((ROOT / 'pb_public/index.html').read_bytes())
+                (d / 'pocketbase').symlink_to(BINARY)
+                source = d / 'client-package'; source.mkdir()
+                core_manifest = json.loads(json.dumps(manifest))
+                for name in core_manifest['package']:
+                    target = source / name; target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(ROOT / name, target)
+                for name in core_manifest['gateway_preserved']:
+                    core_manifest['gateway_preserved'][name] = hashlib.sha256((d / 'pb_hooks' / name).read_bytes()).hexdigest()
+                (source / 'MANIFEST.json').write_text(json.dumps(core_manifest))
+                core_path = ROOT / 'scripts/install.py'
+                code = core_path.read_text().replace("pathlib.Path('/opt/pocketbase')", 'pathlib.Path(' + repr(str(d)) + ')').replace("pathlib.Path('/opt')", 'pathlib.Path(' + repr(str(d / 'backups')) + ')').replace('http://127.0.0.1:8090', BASE)
+                core = {'__name__':'fixture_client_installer','__file__':str(core_path)}
+                exec(compile(code, str(core_path), 'exec'), core)
+                core['SOURCE'] = source
+                def core_run(*args):
+                    if args[0] == 'systemctl':
+                        if args[1] != 'is-active': systemctl(*args)
+                        return subprocess.CompletedProcess(args, 0, stdout='active', stderr='')
+                    return subprocess.run(args, check=True, capture_output=True, text=True)
+                core['run'] = core_run
+                config_before = (d / 'pb_data/karavay-test-access.json').read_bytes()
+                import unittest.mock as mock
+                with mock.patch.object(sys, 'argv', ['install.py','--apply']): core['main']()
+                assert (d / 'pb_data/karavay-test-access.json').read_bytes() == config_before
+                for c in before:
+                    assert call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] == before[c]
+                print('PASS: client-only core installer main/apply, auth gates, served HTML and journal; test config and all existing users/rights retained.')
             finally:
                 proc = running[0]
             (d / 'pb_data/karavay-test-access.json').unlink()

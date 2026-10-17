@@ -5,11 +5,17 @@
 всей КИС. Выбор этих компаний по первым записям справочника не обеспечил полный
 тестовый сценарий. Фиксировать их в новом пакете больше не требуется.
 
-Актуальный установщик `Karavay-Test-3.8.2-KIS-Read.ps1` из Downloads:
+Актуальный установщик `Karavay-Test-3.8.2-Lots-Fix.ps1` из Downloads:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\Karavay-Test-3.8.2-KIS-Read.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\Karavay-Test-3.8.2-Lots-Fix.ps1"
 ```
+
+Для отдельного исправления лотков/штук в текущем клиенте добавьте `-ClientOnly`.
+Этот режим использует `scripts/install.py --apply`, сохраняет текущую тестовую
+конфигурацию и не выполняет подбор/создание новых аккаунтов. Правила количества:
+`classic-release/QUANTITY-RULES.md`. Описанный ниже полный подбор выполняется
+при запуске без этого флага.
 
 На VM сначала выполняются только чтения:
 

@@ -14,6 +14,14 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
   if(config.history){await page.getByRole('link',{name:'История заказов',exact:true}).click();await page.getByRole('button',{name:'№8008',exact:true}).waitFor();}
   await page.getByRole('link',{name:'Оформить заказ',exact:true}).click();
   await page.getByRole('button',{name:'Показать прайс-лист'}).click();await page.getByText('Хлеб из КИС',{exact:true}).waitFor();
+  if(await page.getByLabel('Штуки LOT8',{exact:true}).count())throw Error('Tray-only item allows pieces');
+  if(!await page.getByLabel('Штуки 1263',{exact:true}).isEnabled())throw Error('Piece-allowed item blocked');
+  await page.getByRole('button',{name:'Добавить лоток LOT8',exact:true}).click();
+  if(await page.getByLabel('Лотки LOT8',{exact:true}).inputValue()!=='1')throw Error('Tray count not updated');
+  await page.setViewportSize({width:390,height:844});
+  if(await page.getByLabel('Штуки LOT8',{exact:true}).count()||await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Mobile tray-only input/layout failure');
+  await page.setViewportSize({width:1440,height:1000});
+  await page.getByRole('button',{name:'Уменьшить лотки LOT8',exact:true}).click();
   await page.getByRole('button',{name:'Добавить лоток 1263',exact:true}).click();
   await page.getByRole('button',{name:'Проверить заказ',exact:true}).first().click();
   await page.getByRole('dialog').getByText('8 шт.',{exact:true}).waitFor();

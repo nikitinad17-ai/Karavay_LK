@@ -18,6 +18,7 @@ const explanations:Record<string,string>={
  PRICE_CHANGED:'Цена изменилась. Обновите прайс-лист и проверьте заказ.',
  PRODUCT_UNAVAILABLE:'Товар больше недоступен для этой даты. Обновите прайс-лист.',
  MINIMUM_QUANTITY:'Количество меньше минимального. Проверьте позиции заказа.',
+ LOT_MULTIPLE:'Товар отгружается только целыми лотками. Обновите прайс-лист и проверьте количество.',
  DATE_IN_PAST:'Дата заказа уже прошла. Выберите новую дату.',
  KIS_CONTRACT_MISMATCH:'КИС отклонила создание: ошибка параметра aId_Clt на стороне API. Передайте код KIS_CONTRACT_MISMATCH администратору.',
  KIS_REJECTED:'КИС отклонила заказ. Проверьте дату, ограничения получателя и минимальную сумму; при повторной ошибке обратитесь к менеджеру.',
@@ -50,7 +51,8 @@ export function validId(n:unknown):n is number{return typeof n==='number'&&Numbe
 export function params(payer:string,client:number){if(!/^[a-z0-9]{15}$/.test(payer)||!validId(client))throw new Error('Invalid context');return 'payer='+payer+'&client='+client;}
 export const today=()=>new Date(Date.now()+10800000).toISOString().slice(0,10);
 export function timestamp(date:string){if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error('Invalid date');const n=Date.parse(date+'T00:00:00+03:00');if(!Number.isFinite(n)||new Date(n+10800000).toISOString().slice(0,10)!==date)throw new Error('Invalid date');return n/1000;}
-export function quantityError(p:Product,n:number){if(!Number.isSafeInteger(n)||n<1)return 'Укажите целое количество больше нуля.';if(p.cenaotp===null)return 'В КИС не указана цена.';if(p.kolshtordmin!==null&&n<p.kolshtordmin)return 'Минимальное количество: '+p.kolshtordmin+' шт.';return '';}
+export const lotOnly=(p:Product)=>p.kolshtordmin===null;
+export function quantityError(p:Product,n:number){if(!Number.isSafeInteger(n)||n<1)return 'Укажите целое количество больше нуля.';if(p.cenaotp===null)return 'В КИС не указана цена.';if(lotOnly(p)){if(!validId(p.kol_sht))return 'В КИС не указано число штук в лотке. Заказ позиции недоступен.';if(n%p.kol_sht!==0)return 'Товар отгружается только целыми лотками по '+p.kol_sht+' шт.';}if(p.kolshtordmin!==null&&n<p.kolshtordmin)return 'Минимальное количество: '+p.kolshtordmin+' шт.';return '';}
 export async function context(){const d=await request<Context>('/service/context');if(!d?.user||!['owner','manager','viewer'].includes(d.user.role)||!Array.isArray(d.payers)||d.payers.some(p=>!/^[a-z0-9]{15}$/.test(p.id)))throw new ApiError(502,'INVALID_CONTEXT');return d;}
 export async function clients(payer:string,signal:AbortSignal){let cursor:number|null=null;const result:Client[]=[];const ids=new Set<number>();for(let page=0;page<501;page++){
   const d: {payer:string;clients:Client[];count:number;hasMore:boolean;nextCursor:number|null}=await request('/service/clients?payer='+payer+(cursor===null?'':'&cursor='+cursor)+'&perPage=20',{signal});
@@ -60,7 +62,7 @@ export async function clients(payer:string,signal:AbortSignal){let cursor:number
 }throw new ApiError(502,'TOO_MANY_CLIENTS');}
 export async function catalog(payer:string,client:number,date:string,group:number,signal:AbortSignal){const t=timestamp(date);const d=await request<{payer:string;client:number;DateOrd:number;Group:number;count:number;products:Product[]}>('/service/catalog?'+params(payer,client)+'&DateOrd='+t+'&Group='+group,{signal});
  if(d.payer!==payer||d.client!==client||d.DateOrd!==t||d.Group!==group||!Array.isArray(d.products)||d.count!==d.products.length)throw new ApiError(502,'INVALID_CATALOG');
- const ids=new Set<number>();for(const p of d.products){if(!validId(p.id)||ids.has(p.id)||typeof p.name!=='string')throw new ApiError(502,'INVALID_PRODUCT');ids.add(p.id);for(const k of ['cenaotp','basecenaotp','procskd','kolshtordmin','kol_sht'] as const){if(p[k]==null)p[k]=null;else if(typeof p[k]!=='number'||!Number.isFinite(p[k])||p[k]!<0)throw new ApiError(502,'INVALID_PRODUCT');}}
+ const ids=new Set<number>();for(const p of d.products){if(!validId(p.id)||ids.has(p.id)||typeof p.name!=='string')throw new ApiError(502,'INVALID_PRODUCT');ids.add(p.id);for(const k of ['cenaotp','basecenaotp','procskd','kolshtordmin','kol_sht'] as const){if(p[k]==null)p[k]=null;else if(typeof p[k]!=='number'||!Number.isFinite(p[k])||p[k]!<0)throw new ApiError(502,'INVALID_PRODUCT');}for(const k of ['kol_sht','kolshtordmin'] as const)if(p[k]!==null&&!Number.isSafeInteger(p[k]))throw new ApiError(502,'INVALID_PRODUCT');}
  return d.products;
 }
 export async function orders(payer:string,client:number,signal:AbortSignal){const d=await request<{payer:string;client:number;count:number;orders:Order[]}>('/service/orders?'+params(payer,client),{signal});if(d.payer!==payer||d.client!==client||!Array.isArray(d.orders)||d.count!==d.orders.length||new Set(d.orders.map(o=>o.id)).size!==d.orders.length||d.orders.some(o=>!validId(o.id)))throw new ApiError(502,'INVALID_ORDERS');return d.orders;}

@@ -7,10 +7,11 @@ output.mkdir(parents=True, exist_ok=True)
 manifest = json.loads((ROOT / 'MANIFEST.json').read_text())
 payload = io.BytesIO()
 with zipfile.ZipFile(payload, 'w', zipfile.ZIP_DEFLATED) as archive:
-    for name in [*manifest['package'], 'MANIFEST.json', 'scripts/install.py', 'scripts/Seed-Demo-Users.py', 'test-access/install-test.py', 'test-access/1792260000_test_history_users.js', 'test-access/install-history.py', 'test-access/select-history.py', 'test-access/HISTORY-3.8.2.md', 'test-access/README.md']:
+    for name in [*manifest['package'], 'MANIFEST.json', 'QUANTITY-RULES.md', 'scripts/install.py', 'scripts/Seed-Demo-Users.py', 'test-access/install-test.py', 'test-access/1792260000_test_history_users.js', 'test-access/install-history.py', 'test-access/select-history.py', 'test-access/HISTORY-3.8.2.md', 'test-access/README.md']:
         archive.write(ROOT / name, name)
 raw = payload.getvalue()
-script = r'''# KARAVAY 3.8.2 KIS-Read: VM-confirmed history route without query attributes.
+script = r'''# KARAVAY 3.8.2 Lots-Fix: restore full-tray rules from KIS.
+param([switch]$ClientOnly)
 $ErrorActionPreference = 'Stop'
 $taskDir = Join-Path $env:USERPROFILE 'Downloads\Karavay-Test-3.8.2'
 New-Item -ItemType Directory -Path $taskDir -Force | Out-Null
@@ -30,15 +31,18 @@ zipfile.ZipFile(p).extractall('/home/lindevadmin/karavay-test-3.8.2')
 '@
 [IO.File]::WriteAllText($taskUnpack, $taskPython, [Text.Encoding]::ASCII)
 Write-Host 'One-time VM update. SSH/sudo may request the VM password. Test login will need no password.'
-Write-Host 'KIS-READ FIX: history GET without Id_pay, offset or limit.'
+if ($ClientOnly) { Write-Host 'CLIENT UPDATE: whole-tray rules; existing test configuration retained.' }
+else { Write-Host 'HISTORY SELECTION: full KIS buyer directory, verified history and catalog required.' }
 & scp $taskZip $taskUnpack 'lindevadmin@192.168.25.98:/home/lindevadmin/'
 if ($LASTEXITCODE -ne 0) { throw 'SSH upload failed; no installation was started.' }
-$taskRemote = 'python3 /home/lindevadmin/karavay-test-3.8.2-unpack.py && sudo python3 /home/lindevadmin/karavay-test-3.8.2/test-access/install-history.py --apply'
+$taskRemote = if ($ClientOnly) { 'python3 /home/lindevadmin/karavay-test-3.8.2-unpack.py && sudo python3 /home/lindevadmin/karavay-test-3.8.2/scripts/install.py --apply' }
+else { 'python3 /home/lindevadmin/karavay-test-3.8.2-unpack.py && sudo python3 /home/lindevadmin/karavay-test-3.8.2/test-access/install-history.py --apply' }
 & ssh -t 'lindevadmin@192.168.25.98' $taskRemote
 if ($LASTEXITCODE -ne 0) { throw 'VM update stopped. Read the error above. Repeating this installer preserves completed users and rights.' }
-Write-Host 'READY: open the cabinet and choose one of three test users.'
+if ($ClientOnly) { Write-Host 'READY: client quantity rules updated.' }
+else { Write-Host 'READY: open the cabinet and choose one of three test users.' }
 Start-Process 'http://192.168.25.98:8090/'
 '''.replace('__PAYLOAD__', base64.b64encode(raw).decode()).replace('__SHA256__', hashlib.sha256(raw).hexdigest())
-target = output / 'Karavay-Test-3.8.2-KIS-Read.ps1'
+target = output / 'Karavay-Test-3.8.2-Lots-Fix.ps1'
 target.write_text(script, encoding='ascii', newline='\r\n')
 print(target)
