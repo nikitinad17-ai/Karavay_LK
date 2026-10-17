@@ -30,3 +30,27 @@ No claim that fixture success proves the live integration.
 
 Main and the manager application/rights are unchanged. Branch:
 `feature/client-classic-orders-3.8`.
+
+## VM evidence — 2026-10-17
+
+User screenshot confirms successful passwordless login and `/service/context`,
+then `/service/orders?payer=<mapped payer>&client=2` returning HTTP success with
+`count=0,total=0,orders=[],hasMore=false`. This confirms the empty KIS history
+for that recipient at the time of the check; it does not prove other recipients
+have no orders. Test recipient selection did not include a history check.
+No successful real KIS POST has been confirmed.
+
+`Find-History-20261017.ps1` searches existing history using the configured multi
+test account and service routes, with point/time limits. It checks the four
+previously confirmed recipients first, then paginates both buyers. Business
+operations are GET only; its sole POST is test authentication. No tokens are
+printed/saved, and errors are reported separately from empty results. It stops
+at the first usable order history; the user can select that point under the
+all-recipients or multi-buyer test login without changing rights or reinstalling.
+
+Finder validation: executed in native PowerShell 7.4.6 against an isolated HTTP
+fixture. Verified automatic test authentication, buyer order independence, known
+recipient lookup, upstream errors distinct from empty results, existing history
+detection, report creation, token exclusion, and GET-only business traffic. PASS.
+Windows PowerShell 5.1 was not available; script uses its supported syntax.
+No real VM history beyond the confirmed empty recipient 2 is inferred from this.
