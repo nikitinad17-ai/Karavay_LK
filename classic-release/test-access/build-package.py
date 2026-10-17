@@ -38,6 +38,6 @@ if ($LASTEXITCODE -ne 0) { throw 'VM update stopped. Read the error above. Repea
 Write-Host 'READY: open the cabinet and choose one of three test users.'
 Start-Process 'http://192.168.25.98:8090/'
 '''.replace('__PAYLOAD__', base64.b64encode(raw).decode()).replace('__SHA256__', hashlib.sha256(raw).hexdigest())
-target = output / 'Karavay-Test-3.8.2.ps1'
+target = output / 'Karavay-Test-3.8.2-History-Fix.ps1'
 target.write_text(script, encoding='ascii', newline='\r\n')
 print(target)

@@ -9,12 +9,14 @@ class Kis:
         if path=='/payers':return [{k:v for k,v in p.items() if k!='state'} for p in buyers]
         if path.startswith('/payers/'):
             kid=int(path.split('/')[2]);p=next(p for p in buyers if p['id']==kid)
-            if '/orders?' in path:return [] if self.empty or kid==900003 else [{'id':kid+1}]
+            if '/orders?' in path:
+                assert ('?Id_pay='+str(kid)+'&offset=0&limit=5') in path
+                return {'Id_pay':kid,'Orders':[] if self.empty or kid==900003 else [{'id':kid+1}]}
             if path.endswith('/clients'):return [self.point(kid)]
             return p
         if path.startswith('/clients/'):
             cid=int(path.split('/')[2]);kid=cid-10
-            if path.endswith('/orders'):return [{'id':kid+1}]
+            if path.endswith('/orders'):return {'id_clt':cid,'Orders':[{'id':kid+1}]}
             if '/matrix?' in path:return [{'id_prd':66,'cenaotp':34.9}]
             return self.point(kid)
         if path.startswith('/orders/'):
@@ -31,3 +33,21 @@ again=selection.select(api,saved,emit=lambda _:None);assert [x['point']['id'] fo
 try:selection.select(Kis(empty=True),emit=lambda _:None);raise AssertionError('Empty scenarios must fail before writes')
 except RuntimeError as e:assert 'HISTORY_SCENARIOS_NOT_FOUND' in str(e) and 'empty buyer histories=4' in str(e)
 print('PASS: selection skips banned/empty/foreign buyers, verifies history+details+matrix, reuses saved scenarios, fails closed on empty KIS; all requests read-only.')
+
+class BadOwner(Kis):
+    def call(self,path,**kw):
+        value=super().call(path,**kw)
+        if '/orders?' in path:value['Id_pay']=1
+        return value
+try:selection.select(BadOwner(),emit=lambda _:None);raise AssertionError('Foreign owner wrapper accepted')
+except RuntimeError as e:assert 'HISTORY_SCENARIOS_NOT_FOUND' in str(e)
+class BadQuery(Kis):
+    def call(self,path,**kw):
+        if '/orders?' in path:
+            self.calls.append(path)
+            raise RuntimeError('HTTP 400 at documented order route')
+        return super().call(path,**kw)
+api=BadQuery()
+try:selection.select(api,emit=lambda _:None);raise AssertionError('Expected contract failure')
+except RuntimeError:assert sum('/orders?' in p for p in api.calls)==3
+print('PASS: exact captured OpenAPI Id_pay/Orders and id_clt/Orders wrappers, explicit query Id_pay, foreign-owner rejection, three-error stop.')

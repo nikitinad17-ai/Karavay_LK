@@ -13,6 +13,14 @@ function transport(path,body){
   return {status:Number(m[1]),doc};
 }
 function get(path){const r=transport(path);if(r.status!==200||!r.doc||r.doc.success!==true||!('data' in r.doc))fail(502,'UPSTREAM_INVALID_RESPONSE');return r.doc.data;}
+function clientOrders(data,cid){
+  if(Array.isArray(data))return data;
+  if(!data||typeof data!=='object'||!Object.prototype.hasOwnProperty.call(data,'Orders'))fail(502,'INVALID_ORDERS');
+  if(data.id_clt!==cid)fail(403,'ACCESS_DENIED');
+  if(data.Orders===null)return [];
+  if(!Array.isArray(data.Orders))fail(502,'INVALID_ORDERS');
+  return data.Orders;
+}
 function authorize(app,uid,payer,client,write,expected){
   let u,p,role;try{u=app.findRecordById('users',uid);p=app.findRecordById('payers',payer);role=app.findRecordById('roles',u.get('role'));}catch(_){fail(403,'ACCESS_DENIED');}
   const allowedRoles=write?['owner','manager']:['owner','manager','viewer'];
@@ -51,7 +59,7 @@ function list(e){
   const q=/^payer=([a-z0-9]{15})&client=([1-9][0-9]{0,14})(?:&offset=([0-9]{1,5}))?$/.exec(e.request.url.rawQuery||'');
   if(!q||!id(Number(q[2])))fail(400,'INVALID_PARAMETERS');
   const payer=q[1],client=Number(q[2]),offset=Number(q[3]||0),kid=authorize(e.app,e.auth.id,payer,client,false);membership(kid,client);
-  const rows=get('/clients/'+client+'/orders');if(!Array.isArray(rows)||rows.length>10000)fail(502,'INVALID_ORDERS');
+  const rows=clientOrders(get('/clients/'+client+'/orders'),client);if(rows.length>10000)fail(502,'INVALID_ORDERS');
   const ids=new Set();for(const row of rows){if(!row||!id(row.id)||ids.has(row.id))fail(502,'INVALID_ORDER');ids.add(row.id);}
   const selected=rows.slice(offset,offset+20),orders=selected.map(row=>header(get('/orders/'+row.id),row.id,client));
   authorize(e.app,e.auth.id,payer,client,false,kid);

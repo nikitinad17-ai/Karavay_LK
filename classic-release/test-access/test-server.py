@@ -59,6 +59,7 @@ elif p in ('/orders/8','/orders/9'):
 elif p=='/orders/7':
  b=json.loads(last.read_text());data={'id':7,'client_id':b['Id_clt'],'order_number':948,'order_date':datetime.datetime.fromtimestamp(b['DateOrd']+10800,datetime.timezone.utc).strftime('%Y-%m-%dT00:00:00'),'create_date':b['DateOrd'],'kol_sht':8,'sum_all':279.2,'state':0,'products':[{'id':66,'product_kod':'1263','product_name':'Хлеб из КИС','kol_sht':8,'cena_otp':34.9,'sum_all':279.2}]}
 else:data=docs[p]
+if p.startswith('/clients/') and p.endswith('/orders') and (root/'wrapper').exists():data={'id_clt':999999 if (root/'foreign-wrapper').exists() else int(p.split('/')[2]),'Orders':'invalid' if (root/'invalid-wrapper').exists() else data}
 print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status))
 ''')
     (d / 'bin/curl').chmod(0o755)
@@ -124,6 +125,13 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             assert len(call('/service/context', token=token)['payers']) == 1
             assert [c['id'] for c in call('/service/clients?payer='+p1+'&perPage=20', token=token)['clients']] == [config['point']['kid']]
             call('/service/clients?payer='+p2+'&perPage=20', token=token, expected=403)
+            q='/service/orders?payer='+p1+'&client='+str(config['point']['kid'])
+            (d/'wrapper').write_text('yes')
+            call(q,token=token)
+            (d/'foreign-wrapper').write_text('yes');call(q,token=token,expected=403);(d/'foreign-wrapper').unlink()
+            (d/'invalid-wrapper').write_text('yes');call(q,token=token,expected=502);(d/'invalid-wrapper').unlink()
+            if not history_mode:(d/'wrapper').unlink()
+
             call('/service/order-options?payer='+p1+'&client='+str(2 if history_mode else 234243), token=token, expected=403)
             for i, a in enumerate(accounts):
                 t = call('/service/test-access', {'id':a['id']})['token']

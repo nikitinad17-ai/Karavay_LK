@@ -15,6 +15,17 @@ def rows(api, path):
         raise RuntimeError('Invalid KIS list: ' + path)
     return value
 
+def order_rows(api, path, owner_key, owner_id):
+    """OpenAPI wrappers, plus the flat client array observed in the VM capture."""
+    value = api.call(path, kis=True)
+    if isinstance(value, dict):
+        if value.get(owner_key) != owner_id or 'Orders' not in value:
+            raise RuntimeError('KIS order owner/format mismatch: ' + path)
+        value = [] if value['Orders'] is None else value['Orders']
+    if not isinstance(value, list) or len(value) > 10000 or any(not isinstance(x, dict) for x in value):
+        raise RuntimeError('Invalid KIS order list: ' + path)
+    return value
+
 def header(d, oid, cid):
     if not isinstance(d, dict) or d.get('id') != oid or d.get('client_id') != cid:
         raise RuntimeError('KIS order membership mismatch')
@@ -33,7 +44,7 @@ def verify_point(api, payer, cid, deadline):
         raise RuntimeError('Inactive or foreign recipient')
     if not any(r.get('id') == cid for r in rows(api, '/payers/' + str(payer['id']) + '/clients')):
         raise RuntimeError('Recipient missing from KIS directory')
-    orders = rows(api, '/clients/' + str(cid) + '/orders')
+    orders = order_rows(api, '/clients/' + str(cid) + '/orders', 'id_clt', cid)
     if not orders or len({r.get('id') for r in orders}) != len(orders) or any(not positive(r.get('id')) for r in orders):
         raise RuntimeError('No usable recipient history')
     first = None
@@ -65,7 +76,7 @@ def select(api, saved=None, max_buyers=100, seconds=300, emit=print):
         return result
     directory = rows(api, '/payers')
     candidates = sorted((p for p in directory if eligible(p, False)), key=lambda p:p['id'], reverse=True)
-    result, errors, empty = [], 0, 0
+    result, errors, empty, repeated = [], 0, 0, {}
     for index, p in enumerate(candidates[:max_buyers]):
         if time.monotonic() >= deadline: break
         emit('HISTORY_BUYER_CHECK: ' + str(index + 1) + ' | KIS ' + str(p['id']))
@@ -73,7 +84,7 @@ def select(api, saved=None, max_buyers=100, seconds=300, emit=print):
             pid = p['id']
             p = api.call('/payers/' + str(pid), kis=True)
             if not isinstance(p, dict) or p.get('id') != pid or not eligible(p): continue
-            recent = rows(api, '/payers/' + str(p['id']) + '/orders?offset=0&limit=5')
+            recent = order_rows(api, '/payers/' + str(p['id']) + '/orders?Id_pay=' + str(p['id']) + '&offset=0&limit=5', 'Id_pay', p['id'])
             if not recent: empty += 1
             tried = set()
             for row in recent[:5]:
@@ -96,6 +107,8 @@ def select(api, saved=None, max_buyers=100, seconds=300, emit=print):
         except Exception as error:
             errors += 1
             if errors <= 3: emit('HISTORY_READ_ERROR: ' + str(error)[:200])
-            if errors >= 3 and str(error).startswith('HTTP 404'): break
+            signature = re.sub(r'\d+', '#', str(error))
+            repeated[signature] = repeated.get(signature, 0) + 1
+            if repeated[signature] >= 3: break
         if len(result) == 2: return result
     raise RuntimeError('HISTORY_SCENARIOS_NOT_FOUND: verified buyers=' + str(len(result)) + ', empty buyer histories=' + str(empty) + ', read/contract errors=' + str(errors) + '. No users or files were changed. Check TEST KIS order availability/API; do not install empty scenarios.')

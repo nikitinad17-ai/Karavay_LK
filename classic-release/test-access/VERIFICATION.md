@@ -71,3 +71,17 @@ No real VM history beyond the confirmed empty recipient 2 is inferred from this.
 - KIS in these tests is a fixture. Real VM selection/install 3.8.2 and real KIS
   POST remain unverified. VM screenshot shows 40 checked recipients, no history;
   it does not prove no orders exist for other buyers/recipients.
+
+## History-Fix — saved OpenAPI contract alignment
+
+- Primary source: Karavay-Order-Contract-20261014.zip, captured on the user's VM.
+  PayerOrdersResponse = {Id_pay,Orders}; client schema = {id_clt,Orders}; actual
+  archived client response was a flat array. Explicit query Id_pay is documented.
+- Selector now supports wrappers with owner validation and documented query.
+  Tests reject foreign owner; three repeated HTTP failures stop scanning. PASS.
+- Gateway supports flat and wrapper client orders, rejects foreign id_clt (403)
+  and malformed Orders (502). Real PB/browser fixture tests cover both paths.
+- Existing checkout suite + strict TypeScript/31 tests/production build: PASS.
+- First 3.8.2 VM attempt: 100 read/contract errors, zero empty buyer histories;
+  no deployed files/users changed. Exact first error not visible in screenshot.
+- Corrected build still needs VM verification. No actual KIS POST verified.

@@ -5,17 +5,17 @@
 всей КИС. Выбор этих компаний по первым записям справочника не обеспечил полный
 тестовый сценарий. Фиксировать их в новом пакете больше не требуется.
 
-Один установщик `Karavay-Test-3.8.2.ps1` из Downloads:
+Один установщик `Karavay-Test-3.8.2-History-Fix.ps1` из Downloads:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\Karavay-Test-3.8.2.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\Karavay-Test-3.8.2-History-Fix.ps1"
 ```
 
 На VM сначала выполняются только чтения:
 
 1. Полный справочник покупателей; проверка активности по карточкам. НЕВА,
    ПРОМТЕХСБЫТ и прежние KIS ID 299271/300182 исключены.
-2. Документированный `/payers/{id}/orders?offset=0&limit=5`, затем карточка заказа
+2. Документированный `/payers/{id}/orders?Id_pay={id}&offset=0&limit=5`, затем карточка заказа
    для определения получателя. Поиск ограничен 100 покупателями и 300 секундами.
 3. Активность/принадлежность получателя, его собственный `/clients/{id}/orders`,
    доступность первых 20 карточек, хотя бы один заказ с валидным составом.
@@ -58,3 +58,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\
 
 Источники: `select-history.py`, `install-history.py`, `install-test.py`,
 `1792260000_test_history_users.js`. Сборка `build-package.py` теперь выпускает 3.8.2.
+
+## Исправленная сборка History-Fix
+
+По снимку владельца первая 3.8.2 остановилась: verified buyers=0, empty buyer
+histories=0, read/contract errors=100. Это не доказательство отсутствия заказов.
+В сохранённом на VM 14.10.2026 OpenAPI `PayerOrdersResponse` имеет поля `Id_pay`
+и `Orders`, а `GET /payers/{id_pay}/orders` описывает отдельный query `Id_pay`.
+Изначальный подбор ошибочно ожидал массив. Исправлено: явный документированный
+query, нормализация контейнера с проверкой ID, nullable Orders как пустой список.
+ClientOrdersResponse также поддержан в gateway: `id_clt/Orders`, вместе с ранее
+фактически полученным плоским массивом. Чужой ID/некорректный тип отклоняются.
+Три одинаковые ошибки верхнего чтения останавливают поиск, а не повторяются 100 раз.
+Фактическая первая ошибка на снимке не видна; точная причина всех 100 отказов
+без её текста не установлена. Исправление основано на первичном OpenAPI, не на
+подборе недокументированных полей. Формат POST заказа не изменён.
