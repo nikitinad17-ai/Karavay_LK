@@ -13,6 +13,7 @@ function browser({local={},session={},fetcher}={}){
   if(url.includes('/auth-refresh'))return response(200,{token:'refreshed-token',record:{must_change_password:false}});
   if(url==='/service/manager/state')return response(200,{manager:{name:'Manager'},payers:[],users:[]});
   if(url==='/service/manager/directory')return response(200,{buyers:[]});
+  if(url==='/service/manager/test-login')return response(200,{enabled:false});
   throw Error('Unexpected URL '+url);
  };
  w.AbortController=AbortController;w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.confirm=()=>true;
@@ -23,7 +24,7 @@ function browser({local={},session={},fetcher}={}){
 (async()=>{
  let count=0,b=browser();b.login(true);await wait(()=>!b.q('#workspace').hidden);
  assert.equal(b.w.localStorage.getItem(key),'issued-token');assert.equal(b.w.sessionStorage.getItem(key),null);
- assert.equal(b.q('[name=password]').value,'');assert.deepEqual(Object.keys(b.w.localStorage),[key]);assert(!('remember' in b.requests[0].body));count++;b.close();
+ assert.equal(b.q('[name=password]').value,'');assert.deepEqual(Object.keys(b.w.localStorage),[key]);assert(!('remember' in b.requests.find(r=>r.url.includes('auth-with-password')).body));count++;b.close();
 
  b=browser({local:{[key]:'issued-token'}});await wait(()=>!b.q('#workspace').hidden);
  assert.equal(b.requests[0].url,'/api/collections/users/auth-refresh');assert.equal(b.requests[0].auth,'issued-token');assert.equal(b.w.localStorage.getItem(key),'refreshed-token');assert(!b.requests.some(r=>r.url.includes('auth-with-password')));count++;
@@ -31,7 +32,7 @@ function browser({local={},session={},fetcher}={}){
  b.login(false);await wait(()=>!b.q('#workspace').hidden);assert(b.q('#create'));b.q('#create').click();await wait(()=>b.q('#dialog').open);assert(b.q('[name=login]'));count++;b.close();
 
  b=browser();b.login(false);await wait(()=>!b.q('#workspace').hidden);assert.equal(b.w.localStorage.getItem(key),null);assert.equal(b.w.sessionStorage.getItem(key),'issued-token');count++;b.close();
- b=browser();assert.equal(b.requests.length,0);assert(b.q('#workspace').hidden);count++;b.close();
+ b=browser();assert.equal(b.requests.length,1);assert.equal(b.requests[0].url,'/service/manager/test-login');assert(b.q('#workspace').hidden);count++;b.close();
  b=browser({session:{[key]:'issued-token'}});await wait(()=>!b.q('#workspace').hidden);assert.equal(b.w.sessionStorage.getItem(key),'refreshed-token');assert.equal(b.w.localStorage.getItem(key),null);count++;b.close();
 
  b=browser({local:{[key]:'expired'},fetcher:(url,opt,res)=>url.includes('auth-refresh')&&res(401,{})});await wait(()=>!b.w.localStorage.getItem(key));assert(b.q('#workspace').hidden);assert(!b.requests.some(r=>r.url==='/service/manager/state'));count++;b.close();

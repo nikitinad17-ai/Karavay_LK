@@ -144,7 +144,7 @@ class Preflight(unittest.TestCase):
   self.assertEqual((self.root/'pb_public/index.html').read_text(),'Existing client 3.8.0')
   self.assertTrue((self.root/'pb_public/manager/theme.css').exists())
   backup=next(backups.iterdir());self.assertEqual((backup/'pb_public/manager/app.js').read_bytes(),old)
-  self.assertIn('MANAGER_RELEASE_INSTALLED: 0.8.0',output)
+  self.assertIn('MANAGER_RELEASE_INSTALLED: 0.8.1',output)
 
  def test_partial_copy_failure_restores_the_affected_file(self):
   old,target,backups,output=self.simulated_install(fail_copy=True)

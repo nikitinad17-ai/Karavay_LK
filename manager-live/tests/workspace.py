@@ -25,8 +25,8 @@ quick=setup.quick;seed=quick.seed
 BASE='http://127.0.0.1:18947'
 BINARY=os.environ['PB_BINARY']
 
-def call(path,body=None,token='',method=None,expected=200):
- req=urllib.request.Request(BASE+path,data=json.dumps(body).encode() if body is not None else None,method=method,headers={'Content-Type':'application/json',**({'Authorization':token} if token else {})})
+def call(path,body=None,token='',method=None,expected=200,headers=None):
+ req=urllib.request.Request(BASE+path,data=json.dumps(body).encode() if body is not None else None,method=method,headers={'Content-Type':'application/json',**({'Authorization':token} if token else {}),**(headers or {})})
  try:
   with urllib.request.urlopen(req,timeout=20) as response:status=response.status;raw=response.read()
  except urllib.error.HTTPError as error:status=error.code;raw=error.read()
@@ -92,7 +92,7 @@ print(json.dumps({'success':True,'data':json.loads((pathlib.Path(__file__).resol
    users=api.rows('users','manager_owner = '+json.dumps(mid));assert len(users)==3
    token=call('/api/collections/users/auth-with-password',{'identity':'real_manager@example.test','password':password})['token']
    state=call('/service/manager/state',token=token)
-   assert state['version']=='0.8.0' and state['manager']['email']=='real_manager@example.test' and len(state['users'])==3
+   assert state['version']=='0.8.1' and state['manager']['email']=='real_manager@example.test' and len(state['users'])==3
    assert foreign not in {p['id'] for p in state['payers']}
    diag_spec=importlib.util.spec_from_file_location('manager_diagnostic',ROOT/'scripts/Check-Manager.py');diag=importlib.util.module_from_spec(diag_spec);diag_spec.loader.exec_module(diag)
    diagnostic_root=folder/'diagnostic';diagnostic_root.mkdir()
@@ -108,6 +108,34 @@ print(json.dumps({'success':True,'data':json.loads((pathlib.Path(__file__).resol
    with mock.patch.object(diag.urllib.request,'build_opener',return_value=DiagnosticOpener()):diagnostic=diag.inspect(diagnostic_root,ROOT)
    assert diagnostic_before==snap() and diagnostic['demo_user_count']==3 and diagnostic['managers'][0]['status']=='configuration_ok_password_not_tested'
    assert password not in json.dumps(diagnostic) and admin not in json.dumps(diagnostic)
+   # The public button is absent until the local operator explicitly enables it.
+   test_spec=importlib.util.spec_from_file_location('test_entry',ROOT/'scripts/Enable-Test-Login.py');test_entry=importlib.util.module_from_spec(test_spec);test_spec.loader.exec_module(test_entry)
+   assert call('/service/manager/test-login')['enabled'] is False
+   call('/service/manager/test-login',{},expected=404)
+   test_before=snap();test_entry.toggle(diagnostic_root,None,BASE,BASE);assert snap()==test_before
+   test_entry.toggle(diagnostic_root,True,BASE,BASE)
+   assert snap()==test_before and (folder/'data/manager-test-login.json').stat().st_mode&0o777==0o600
+   status=call('/service/manager/test-login');assert status['enabled'] is True and 'token' not in status and 'email' not in status
+   call('/service/manager/test-login',{},expected=403)
+   call('/service/manager/test-login',{},expected=403,headers={'Origin':'http://foreign.example.test'})
+   call('/service/manager/test-login',{},expected=403,headers={'Origin':'null'})
+   call('/service/manager/test-login?manager=other',{},expected=400,headers={'Origin':BASE})
+   call('/service/manager/test-login',{'manager_id':other},expected=400,headers={'Origin':BASE})
+   test_auth=call('/service/manager/test-login',{},headers={'Origin':BASE});assert test_auth['record']['id']==mid and 'password' not in test_auth['record'] and 'tokenKey' not in test_auth['record']
+   claims=json.loads(base64.urlsafe_b64decode(test_auth['token'].split('.')[1]+'=='));assert claims['refreshable'] is False and 28790<=claims['exp']-int(time.time())<=28800
+   assert call('/service/manager/state',token=test_auth['token'])['manager']['id']==mid and snap()==test_before
+   for collection,key,change in [('users',mid,{'active':False}),('users',mid,{'must_change_password':True}),('roles',roles['manager'],{'active':False})]:
+    old=api.call('/api/collections/'+collection+'/records/'+key)
+    api.call('/api/collections/'+collection+'/records/'+key,change,'PATCH')
+    assert call('/service/manager/test-login')['enabled'] is False
+    call('/service/manager/test-login',{},expected=403,headers={'Origin':BASE})
+    api.call('/api/collections/'+collection+'/records/'+key,{name:old[name] for name in change},'PATCH')
+   config=folder/'data/manager-test-login.json';settings=config.read_bytes();config.write_text('{bad json')
+   assert call('/service/manager/test-login')['enabled'] is False
+   call('/service/manager/test-login',{},expected=404,headers={'Origin':BASE});config.write_bytes(settings)
+   wrong_user=json.loads(settings);wrong_user['manager_id']=buyer_user;config.write_text(json.dumps(wrong_user))
+   assert call('/service/manager/test-login')['enabled'] is False
+   call('/service/manager/test-login',{},expected=403,headers={'Origin':BASE});config.write_bytes(settings)
    ready=snap();setup.configure(api,True,output_dir=folder,public_url=BASE);assert ready==snap()
    for filename in ['Karavay-Manager-Access.html','Karavay-Test-Login.html','Karavay-Manager-Setup-Report.json']:
     p=folder/filename;assert p.stat().st_mode&0o777==0o600
@@ -119,6 +147,11 @@ print(json.dumps({'success':True,'data':json.loads((pathlib.Path(__file__).resol
     quick.verify_login(api,account,expected)
    if os.environ.get('MANAGER_CHROME'):
     subprocess.run(['node',str(ROOT/'tests/browser.cjs')],input=json.dumps({'url':BASE,'email':'real_manager@example.test','buyer_email':'buyer_user@example.test','password':password,'private_file':str(folder/'Karavay-Manager-Access.html')}),text=True,check=True,env=env,cwd=ROOT.parent)
+   test_entry.toggle(diagnostic_root,False,BASE,BASE)
+   assert call('/service/manager/test-login')['enabled'] is False
+   call('/service/manager/test-login',{},expected=404,headers={'Origin':BASE})
+   assert call('/api/collections/users/auth-with-password',{'identity':'real_manager@example.test','password':password})['record']['id']==mid
+   print('PASS: public test button defaults off, fixed manager/empty input, same-origin only, real static token/8h, inactive/role/password guards, config disable, unchanged passwords/rights.')
    api.call('/api/collections/users/records/'+plan['accounts'][0]['id'],{'active':False},'PATCH')
    disabled=snap()
    try:setup.configure(api,True,output_dir=folder,public_url=BASE);raise AssertionError('Disabled demo unexpectedly enabled')

@@ -1,14 +1,15 @@
 {
-  "version": "0.8.0",
+  "version": "0.8.1",
   "package": {
-    "pb_hooks/karavay-manager.js": "0936acd58f04a85a764b6d4826df30fcaf288fc32ec6e6e43f23b9788aa3830c",
-    "pb_hooks/karavay-manager.pb.js": "6e6263987319a4e424d2dd73d9fc818b21d1b901e1ebcc1a0ef312da98e727f1",
-    "pb_public/manager/app.js": "7820ac0aff36e093d11ec7da64595570adf3b49d08a906f8bd7c5210d7e33e95",
-    "pb_public/manager/index.html": "0816b89131960262746fa1f2b1d11585f5f507896175d16e42f3ab5bc99397fd",
+    "pb_hooks/karavay-manager.js": "9d3ac9d795e0988c56830f55b8269e22dea91370da01ef4e9b97610aa553856d",
+    "pb_hooks/karavay-manager.pb.js": "c4baed69ad2f8d22831175cc445fadd4db882c2fa00c66828cfb5e3ae97495e7",
+    "pb_public/manager/app.js": "e31b349a0e6abbb04b684b619574eac96cc8f18d1bd2c83ff9f1faee0a8ef841",
+    "pb_public/manager/index.html": "c9b301b1f683731b11a686a38f00d79138d1d46ddda8d614e837b3eb3ad57e33",
     "pb_public/manager/logo.svg": "81bf7fde81d948a903513f9abf2685ee9dc73753651da2ddbd0bc2baa6ba8df7",
-    "pb_public/manager/styles.css": "3a8f58a2bcf45cb33354c11a5263cc181282c5d6025e4c7643f38b6dd91b8251",
+    "pb_public/manager/styles.css": "9c0809aca5586dc8d7d4658bd3825e0331a4b5ace0b4fb0e92223e9efd1dbb12",
     "pb_migrations/1791993600_manager_drafts.js": "0717feedd305f35d8ca59496a105cea61caccfb757964671d187324d7289f14c",
-    "pb_public/manager/theme.css": "a0708da92d99eb0092e0f3fb86e640100dfded29ecd87d791c024bb79c0ddde8"
+    "pb_public/manager/theme.css": "a0708da92d99eb0092e0f3fb86e640100dfded29ecd87d791c024bb79c0ddde8",
+    "pb_hooks/karavay-manager-test.js": "cf0f66a61300e0b6f4fde8a116e85310171dda9ebbe349bc3f7565970ff8f9de"
   },
   "gateway": {
     "karavay-context.pb.js": "f72ef461d7b34d4e97f84c461b3d2ff9dd4f1c9402b2f7dfa1ea796270ff9d0f",
@@ -71,12 +72,14 @@
       "b2da42afa931902a5188198feca50bbfd5deb590c3667606b3c71c8633dd3c24",
       "8300583e9c7882465d1244ce83884eb500c77055910bd7bc21dd9ecbb3da343b",
       "c57e80de2f3d07206934fcda9117acf4d26fab2cb80bc7e74ec52a9a8fb4eb22",
-      "3c64f45dee59d4563d0692efd403d96ebeb6e8438d4c1f6cc3ad15fe5928975b"
+      "3c64f45dee59d4563d0692efd403d96ebeb6e8438d4c1f6cc3ad15fe5928975b",
+      "0936acd58f04a85a764b6d4826df30fcaf288fc32ec6e6e43f23b9788aa3830c"
     ],
     "pb_hooks/karavay-manager.pb.js": [
       "abb0e95ef67c81eef2dfdebd8e29b2cf8296be0b64d085cb385d5a60190836ec",
       "df57e13d7f77a6e051b23804e189fa61050bd911c56832d4e205c56630629337",
-      "bc706f9e4ecc59e97b58ac6353ee83e91af2fd7b49f7431607d5173e8faa6288"
+      "bc706f9e4ecc59e97b58ac6353ee83e91af2fd7b49f7431607d5173e8faa6288",
+      "6e6263987319a4e424d2dd73d9fc818b21d1b901e1ebcc1a0ef312da98e727f1"
     ],
     "pb_public/manager/app.js": [
       "3cbd149168c61c60eda13eb26c68fc5fa3a75f7e39632a6bc3c566e74ecb2dc6",
@@ -86,7 +89,8 @@
       "26f6aadd5fe06586f1892db1eb49c808dbd311d1119b506dbe00274cac53df95",
       "3d41f447777d27aa006c66c7af0d05c3abe07c6372db452191498e9f9209126c",
       "45a3c37d38562af53e141eaf087f1e8f4d85ab0e4fc4323d61d1ec6c4a7b7a66",
-      "147bee0fbdfeb470f853fed62078d08cb9438228b7a6b8fa8c89f6527e72ab3f"
+      "147bee0fbdfeb470f853fed62078d08cb9438228b7a6b8fa8c89f6527e72ab3f",
+      "7820ac0aff36e093d11ec7da64595570adf3b49d08a906f8bd7c5210d7e33e95"
     ],
     "pb_public/manager/index.html": [
       "aeea602983172740027fa5f112edfe4b71627b8e0885d6208e285faa8d7dce09",
@@ -96,7 +100,8 @@
       "22411f722e0761ec94495401c4215aa19b54962638ec3acc8f196ae2a5ff7b49",
       "7ec4f888641976f3f987e26674635d26d40c7db428dd77b0e95923390404722e",
       "8c4417d6d24310e0c8f8973d484d777da72779e4b1071774596c8e3c848d9f25",
-      "92589c869c047ac1bdb8e81ebe8d7b8764cb9e0057d8808a1be8f16cf40b0d41"
+      "92589c869c047ac1bdb8e81ebe8d7b8764cb9e0057d8808a1be8f16cf40b0d41",
+      "0816b89131960262746fa1f2b1d11585f5f507896175d16e42f3ab5bc99397fd"
     ],
     "pb_public/manager/logo.svg": [
       "81bf7fde81d948a903513f9abf2685ee9dc73753651da2ddbd0bc2baa6ba8df7"
@@ -107,24 +112,32 @@
       "c3627153d178406159cbf7c8f1d0d9b66a5e8d4548da6a49fcc563b90bb4254e",
       "cd046199fb21c5a86de7ba7da50adc673d911e68dfc37e11f80f8ea6be79fdc0",
       "0f4ea942d021c6241a08c6ec4ad664bdc67fdfc26495d24ee3bd2cf58925d1c1",
-      "83004a2a84d845654f248508893937ad780e3ee247fde67eb08db70aabf4682a"
+      "83004a2a84d845654f248508893937ad780e3ee247fde67eb08db70aabf4682a",
+      "3a8f58a2bcf45cb33354c11a5263cc181282c5d6025e4c7643f38b6dd91b8251"
     ],
     "pb_public/index.html": [
       "02574f1c1d0a98684aa8550ff5b3dccf1a5d9867bcddca3a4672c91518c4c12e",
       "54d6097346efb055507ae669697159a80cf13a73350c9cd50837a0571106ed2c"
+    ],
+    "pb_migrations/1791993600_manager_drafts.js": [
+      "0717feedd305f35d8ca59496a105cea61caccfb757964671d187324d7289f14c"
+    ],
+    "pb_public/manager/theme.css": [
+      "a0708da92d99eb0092e0f3fb86e640100dfded29ecd87d791c024bb79c0ddde8"
     ]
   },
-  "interface_revision": "manager-0.8.0",
+  "interface_revision": "manager-0.8.1",
   "setup_files": {
-    "scripts/Configure-Workspace.py": "b9151cdd35e9906cb908a25787287b0a5016d896807dff119a20eabd2bf919d5",
+    "scripts/Configure-Workspace.py": "947df202382a3288b0b0f6d1687dbed58759319658dba2e60b29a21edd9a1d89",
     "scripts/Check-Manager.py": "20d958afb2b8fc2d7014fb26051f0ed5f3cf3059f75950be36aabd7933a89702",
-    "scripts/Install-On-VM.py": "a5273b2ab4864d02f2a9bebadab006eb6ab200f6d75a8a355bf5028765bee4e0",
-    "scripts/Download-Karavay-Manager.ps1": "4028ac32da8b75cb4d99ae98b84fc480876b8082aafb10127f83c759afd5174c",
-    "scripts/build-release.py": "a4bead14e5887c5a07a29d2cfb16d2f214e1a697801b14819202e78fd59d79c1",
+    "scripts/Install-On-VM.py": "ae4bf4babe71895a8bab5d3a018e0efd44e0be3cd8241c4f528477496e2da6af",
+    "scripts/Download-Karavay-Manager.ps1": "aec106de57e1a5df02b60b5d04c55e23678f0ec7cc8c3fbb63b60dafa2da7115",
+    "scripts/build-release.py": "39b3bf994b82d34c5d9f472c054b92f91aaea1f56f25fd4e7e385acaee2fb6db",
     "setup/SOURCE.json": "38ae9a878472725183730ce3298e4aa9be35095b5ba70561928c10bc36c9ad9e",
     "setup/quick-access/Create-Quick-Users.py": "648c430e589390524b8d7ec01b4c4cf0b4ce6d374d13bed54799ce851ba4e9a5",
     "setup/quick-access/launcher.css": "d67bf46dd378d9a6c1e04414a9a2066bf770c8007cc879abbb760629468300a3",
     "setup/quick-access/launcher.js": "41ed48cd21b7b156883c3402107b7c3fb28c84869eeb4c253f20057d89635755",
-    "setup/scripts/Seed-Demo-Users.py": "d42ca961078655a4ed6d5a1ef7e5fc700722e3c307e9840d6fa2948ba8cb0f65"
+    "setup/scripts/Seed-Demo-Users.py": "d42ca961078655a4ed6d5a1ef7e5fc700722e3c307e9840d6fa2948ba8cb0f65",
+    "scripts/Enable-Test-Login.py": "5842573e3b7320abe4618522bb211a3f170aea347c98b9f5a1ea167ddc42761d"
   }
 }

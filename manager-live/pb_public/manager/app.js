@@ -13,6 +13,20 @@ function saveSession(value,remember){
 }
 const errors={USER_INACTIVE:'Учётная запись отключена. Обратитесь к администратору.',ROLE_INACTIVE:'Роль менеджера отключена. Обратитесь к администратору.',PASSWORD_CHANGE_REQUIRED:'Сначала смените временный пароль.',INVALID_EMAIL:'Проверьте контактный email.',INVALID_MAPPING:'У назначения покупателя некорректная связь с КИС. Нужна проверка настроек.',PAYER_ALREADY_REGISTERED_OR_UNAVAILABLE:'Покупатель уже подключён или недоступен. Обновите список.',INVALID_RIGHT:'Проверьте выбранных покупателей и получателей.',MANAGER_REQUIRED:'Доступ разрешён только активному менеджеру.',ACCESS_DENIED:'Нет доступа к этой записи.',SHARED_ACCOUNT:'У пользователя есть доступы вне вашей области. Изменение выполняет администратор.',PAYER_ALREADY_REGISTERED:'Этот покупатель уже подключён. Назначение доступа выполняет администратор.',CLIENT_UNAVAILABLE:'Получатель недоступен или отключён в КИС.',MAIL_UNAVAILABLE:'Не удалось передать письмо. Проверьте SMTP на сервере.',SAVE_FAILED:'Запись не сохранена. Проверьте поля и уникальность email, логина и кодов.',KIS_UNAVAILABLE:'КИС недоступна. Повторите позже.',PAYER_NOT_VERIFIED:'КИС не подтвердила покупателя с действующим получателем.',ROLE_UNAVAILABLE:'Роль не настроена или отключена.',INVALID_USER:'Проверьте логин, email и роль.',PASSWORD_TOO_SHORT:'Пароль должен содержать не меньше 12 символов.'};
 function loginError(message){$('#login-error').textContent=message;}
+async function loadTestLogin(){
+ if(privateAccess)return;
+ const panel=$('#test-access');
+ try{const data=await api('/service/manager/test-login',undefined,false);panel.hidden=data.enabled!==true;}
+ catch(_){panel.hidden=true;}
+}
+$('#test-login').onclick=async()=>{
+ const button=$('#test-login'),g=++authGeneration;button.disabled=true;loginError('');
+ try{const data=await api('/service/manager/test-login',{},false);if(g!==authGeneration)return;
+  if(!data.token||!data.record?.id||data.record.role_code!=='manager')throw Error('Тестовый вход недоступен. Обновите страницу.');
+  saveSession(data.token,false);$('#login-form').reset();await enterAccount(data.record);
+ }catch(error){if(g===authGeneration)loginError(errors[error.code]||(error.code==='TEST_LOGIN_DISABLED'?'Тестовый вход отключён на сервере.':error.code==='TEST_LOGIN_ORIGIN'?'Откройте страницу входа по адресу сервера КАРАВАЯ.':error.message));}
+ finally{button.disabled=false;}
+};
 function staticToken(){try{return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).refreshable===false;}catch(_){return false;}}
 function notify(s){if($('#workspace').hidden)loginError(s);$('#message').textContent=s;$('#message').hidden=false;setTimeout(()=>$('#message').hidden=true,8000);}
 async function api(path,body,auth=true){
@@ -196,3 +210,4 @@ window.addEventListener('beforeunload',e=>{if($('#dialog').open&&snapshot()!==ba
 window.addEventListener('storage',e=>{if(e.key===LOGOUT_KEY||(remembered&&e.key===TOKEN_KEY&&!e.newValue))logout(false);});
 if(privateAccess){$('#private-access').hidden=false;$('#private-access-note').textContent=(privateAccess.name||'Менеджер')+' · '+privateAccess.email+' · личный доступ действует до '+new Date(privateAccess.expires*1000).toLocaleString('ru-RU');$('#private-login').onclick=()=>{loginError('');saveSession(privateAccess.token,false);restoreSession();};}
 if(token)restoreSession();
+if(!privateAccess)loadTestLogin();

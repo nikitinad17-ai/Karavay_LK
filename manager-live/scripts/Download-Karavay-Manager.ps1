@@ -2,15 +2,16 @@ param(
     [switch]$CopyToVM,
     [switch]$Install,
     [switch]$ConfigureWorkspace,
+    [switch]$EnableTestLogin,
     [ValidatePattern('^([0-9a-f]{40})?$')][string]$SourceRevision = ''
 )
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-if (($Install -or $ConfigureWorkspace) -and -not $SourceRevision) { throw 'Installation/setup requires an exact Git commit in -SourceRevision.' }
+if (($Install -or $ConfigureWorkspace -or $EnableTestLogin) -and -not $SourceRevision) { throw 'Installation/setup requires an exact Git commit in -SourceRevision.' }
 $revision = if ($SourceRevision) { $SourceRevision } else { 'feature/manager-cabinet-v0.3' }
 $base = 'https://raw.githubusercontent.com/nikitinad17-ai/Karavay_LK/' + $revision + '/manager-live'
 $runId = 'manager-08-' + [Guid]::NewGuid().ToString('N')
-$label = 'Karavay-Manager-0.8.0-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $runId.Substring($runId.Length - 8)
+$label = 'Karavay-Manager-0.8.1-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $runId.Substring($runId.Length - 8)
 $folder = Join-Path (Join-Path $env:USERPROFILE 'Downloads') $label
 New-Item -ItemType Directory -Path $folder | Out-Null
 Invoke-WebRequest -UseBasicParsing -Uri ($base + '/MANIFEST.json') -OutFile (Join-Path $folder 'MANIFEST.json')
@@ -28,18 +29,22 @@ $archive = $folder + '.zip'
 if ($ConfigureWorkspace -and $runId -notmatch '^[A-Za-z0-9_-]{1,100}$') { throw 'Invalid setup run ID. No VM command was started.' }
 Compress-Archive -Path (Join-Path $folder '*') -DestinationPath $archive
 Write-Host ('PACKAGE VERIFIED: ' + $archive)
-if ($CopyToVM -or $Install -or $ConfigureWorkspace) {
+if ($CopyToVM -or $Install -or $ConfigureWorkspace -or $EnableTestLogin) {
     $vm = 'lindevadmin@192.168.25.98'
     & scp -r $folder "${vm}:/home/lindevadmin/"
     if ($LASTEXITCODE -ne 0) { throw 'SSH copy failed. The service was not changed. Use the VM console route in README; no passwords need changing.' }
     $remote = ''
-    if ($Install -or -not $ConfigureWorkspace) {
+    if ($Install -or -not ($ConfigureWorkspace -or $EnableTestLogin)) {
         $remote = 'sudo python3 /home/lindevadmin/' + $label + '/scripts/install.py'
         if ($Install) { $remote += ' --install' }
     }
     if ($ConfigureWorkspace) {
         if ($remote) { $remote += ' && ' }
         $remote += 'python3 /home/lindevadmin/' + $label + '/scripts/Configure-Workspace.py --apply --run-id ' + $runId
+    }
+    if ($EnableTestLogin) {
+        if ($remote) { $remote += ' && ' }
+        $remote += 'python3 /home/lindevadmin/' + $label + '/scripts/Enable-Test-Login.py --enable'
     }
     & ssh -t $vm $remote
     $vmExit = $LASTEXITCODE
@@ -53,7 +58,7 @@ if ($CopyToVM -or $Install -or $ConfigureWorkspace) {
         & scp "${vm}:/home/lindevadmin/Karavay-Manager-Setup-Report.json" $reportPath
         if ($LASTEXITCODE -ne 0) { throw ('Setup stopped without a downloadable report (VM code ' + $vmExit + '). Read the server message above. Do not reinstall or recreate accounts blindly.') }
         $report = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($report.run_id -ne $runId -or $report.version -ne '0.8.0') { throw 'Results belong to an older run; no access file was downloaded or opened.' }
+        if ($report.run_id -ne $runId -or $report.version -ne '0.8.1') { throw 'Results belong to an older run; no access file was downloaded or opened.' }
         if ($report.manager_access -ne 'ready') { throw 'The current report does not confirm manager access; no access file was downloaded or opened.' }
         if ($vmExit -eq 0 -and $report.demo -ne 'ready') { throw 'VM success and setup report disagree; no access file was downloaded or opened.' }
         $accessNames = @('Karavay-Manager-Access.html')
@@ -70,6 +75,10 @@ if ($CopyToVM -or $Install -or $ConfigureWorkspace) {
         Start-Process (Join-Path $privateDir 'Karavay-Manager-Access.html')
     }
     if ($vmExit -ne 0) { throw ('VM step stopped with code ' + $vmExit + '. Review the last message before retrying.') }
-    if ($Install -and -not $ConfigureWorkspace) { Write-Host 'Manager installed. Setup/demo was not requested. Refresh /manager/ with Ctrl+Shift+R.' }
-    if (-not $Install -and -not $ConfigureWorkspace) { Write-Host 'PREFLIGHT PASSED. No service change was made.' }
+    if ($EnableTestLogin) {
+        Write-Host 'TEST LOGIN READY: http://192.168.25.98:8090/manager/ - click the test manager button.'
+        Start-Process 'http://192.168.25.98:8090/manager/'
+    }
+    if ($Install -and -not ($ConfigureWorkspace -or $EnableTestLogin)) { Write-Host 'Manager installed. Setup/demo was not requested. Refresh /manager/ with Ctrl+Shift+R.' }
+    if (-not ($Install -or $ConfigureWorkspace -or $EnableTestLogin)) { Write-Host 'PREFLIGHT PASSED. No service change was made.' }
 }

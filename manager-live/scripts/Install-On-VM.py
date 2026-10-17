@@ -22,7 +22,7 @@ def main():
     if args.configure and os.geteuid()==0:
         raise RuntimeError('For the complete setup first run: sudo -iu lindevadmin ; then repeat this command. No service changes were made.')
     stamp=datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    folder=Path.home()/('Karavay-Manager-0.8.0-'+stamp)
+    folder=Path.home()/('Karavay-Manager-0.8.1-'+stamp)
     folder.mkdir(mode=0o700)
     base='https://raw.githubusercontent.com/nikitinad17-ai/Karavay_LK/'+args.revision+'/manager-live/'
     def download(name):

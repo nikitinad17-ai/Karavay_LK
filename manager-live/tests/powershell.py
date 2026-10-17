@@ -35,7 +35,7 @@ if name=='ssh':
   print('STOPPED: Invalid run ID');sys.exit(2)
  if scenario=='early-fail':
   print('STOPPED: Fixture setup failed before authentication');sys.exit(2)
- report={'run_id':'old-run' if scenario=='stale' else run_id,'version':'0.7.0' if scenario=='wrong-version' else '0.8.0','manager_access':'ready','demo':'not_ready' if scenario in ('partial','inconsistent') else 'ready'}
+ report={'run_id':'old-run' if scenario=='stale' else run_id,'version':'0.7.0' if scenario=='wrong-version' else '0.8.1','manager_access':'ready','demo':'not_ready' if scenario in ('partial','inconsistent') else 'ready'}
  (remote/'Karavay-Manager-Setup-Report.json').write_text(json.dumps(report))
  for name in ('Karavay-Manager-Access.html','Karavay-Test-Login.html'):(remote/name).write_text('<!doctype html><p>Fixture only, no access</p>')
  sys.exit(2 if scenario=='partial' else 0)
@@ -126,6 +126,15 @@ with tempfile.TemporaryDirectory(prefix='manager-powershell-') as temp:
     for args,install in [(['-Install','-ConfigureWorkspace'],True),(['-ConfigureWorkspace'],False)]:
         calls,opens,_=run(downloader,['-SourceRevision','a'*40,*args])
         assert len(check(calls,install=install,configure=True))==3 and len(opens)==1
+    calls,opens,_=run(complete,['-TestLoginOnly'])
+    assert not check(calls,install=True,configure=False) and opens==['http://192.168.25.98:8090/manager/']
+    assert 'Enable-Test-Login.py --enable' in next(row['args'][2] for row in calls if row['command']=='ssh')
+    calls,opens,output=run(downloader,['-SourceRevision','a'*40,'-EnableTestLogin'])
+    assert not check(calls,install=False,configure=False) and len(opens)==1
+    assert 'PREFLIGHT PASSED' not in output and 'TEST LOGIN READY' in output
+    calls,opens,_=run(complete,['-TestLoginOnly','-PreflightOnly'])
+    assert not check(calls,install=True,configure=False) and not opens
+    assert 'Enable-Test-Login.py' not in next(row['args'][2] for row in calls if row['command']=='ssh')
     # Reproduce the shipped failure using the actual old, self-contained file.
     old=os.environ.get('OLD_PS1')
     if old:

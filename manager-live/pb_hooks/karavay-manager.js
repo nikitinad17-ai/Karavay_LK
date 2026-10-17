@@ -180,7 +180,7 @@ function state(app,uid) {
   const now=manager(app,uid);
   const signature=x=>JSON.stringify(Array.from(x.map,([pid,a])=>[pid,a.all,Array.from(a.ids).sort(),a.record.get('id_pay'),a.record.get('active')]).sort());
   if(signature(m)!==signature(now))fail(403,'ACCESS_CHANGED');
-  return {version:'0.8.0',manager:{id:uid,name:m.user.get('name'),email:m.user.get('email')},payers,users:Array.from(users.values())};
+  return {version:'0.8.1',manager:{id:uid,name:m.user.get('name'),email:m.user.get('email')},payers,users:Array.from(users.values())};
 }
 function mutate(e,b) {
   const uid=e.auth.id, app=e.app, m=manager(app,uid);
@@ -290,4 +290,4 @@ function route(e,kind) {
     return e.json(status,{code:err&&typeof err.code==='string'?err.code:'SAVE_FAILED',requestId:rid});
   }
 }
-module.exports={route};
+module.exports={route,manager};
