@@ -1,0 +1,45 @@
+{
+  "version": "3.8.3",
+  "files": {
+    "pb_hooks/karavay-test-access.js": "753ff0f4136b7cf2861dfac44c26d6d6091219df358991360656e2bbac3a478a",
+    "test-access/install-test.py": "58eddeb6998ddfd6a0d9fa30373fba3ff2eb435abad8fe4bdcf7f46fce32662c",
+    "test-access/install-buyers.py": "4a3d5d3c5c975e614f66bca80c9893adf6e60439be93844df2253507512b006d",
+    "test-access/select-buyers.py": "49e83750afd00717e628979dfe23bbe961e595042308741b2bd935d542380b21",
+    "test-access/1792400000_test_buyer_users.js": "1dd3c228099f64b4ff81b4d1a609bd7d43c83e8bfb5b43c1e9929f5cd2030876",
+    "test-access/BUYERS-3.8.3.md": "ef9d37fc1e7c89e89000d6a403f8d337393342f4bd2bb72888f047f9dcb9e9cd",
+    "scripts/install.py": "364521f737110064d46c1207703e994395be1f55c7821b7bbc9534c8483c818c",
+    "scripts/Seed-Demo-Users.py": "e26e647bd586b6025006d24003908f660ab225aaa4aaa4573a0caa62c16763c5"
+  },
+  "route_sha256": "8bcca34c0fb84e30b4592b5ddb4ad17e8ab3ffc2b887f8376074a38bce1e540c",
+  "required_fields": {
+    "users": {
+      "id": "text",
+      "email": "email",
+      "active": "bool",
+      "must_change_password": "bool",
+      "role": "relation",
+      "role_code": "select"
+    },
+    "roles": {
+      "code_role": "text",
+      "active": "bool"
+    },
+    "payers": {
+      "id_pay": "number",
+      "active": "bool"
+    },
+    "clients": {
+      "id_clt": "number",
+      "payer": "relation",
+      "active": "bool"
+    },
+    "rights": {
+      "user": "relation",
+      "payer": "relation",
+      "client": "relation",
+      "scope": "select",
+      "kis_client_id": "number",
+      "active": "bool"
+    }
+  }
+}

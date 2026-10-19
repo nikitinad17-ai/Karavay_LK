@@ -7,6 +7,10 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
  async function open(){const p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(base);return p;}
  try{
   let page=await open();let passwordRequests=0;page.on('request',r=>{if(r.url().endsWith('/auth-with-password'))passwordRequests++;});
+  if(config.buyers&&process.env.PREVIOUS_TEST_SESSION){
+   await page.evaluate(s=>localStorage.setItem('karavay_classic_session_v1',s),process.env.PREVIOUS_TEST_SESSION);
+   await page.reload();await page.waitForFunction(()=>localStorage.getItem('karavay_classic_session_v1')===null);
+  }
   const account=config.accounts[0];await page.getByRole('button',{name:new RegExp(account.name.replace(/[()]/g,'\\$&'))}).click();
   await page.getByText('Добро пожаловать, '+account.name,{exact:true}).waitFor();
   if(await page.locator('input[type=password]').count())throw Error('Password field visible');

@@ -5,7 +5,7 @@ function config(app){
   let c;try{c=JSON.parse(raw);}catch(_){fail(503,'INVALID_TEST_CONFIG');}
   const rid=s=>typeof s==='string'&&/^[a-z0-9]{15}$/.test(s);
   if(c.enabled!==true||c.environment!=='test-kis')fail(404,'TEST_ACCESS_DISABLED');
-  if(c.version!==1||!Array.isArray(c.accounts)||c.accounts.length!==3||!Array.isArray(c.payers)||c.payers.length!==2||!rid(c.ownerRole)||!rid(c.point?.id)||!Number.isSafeInteger(c.point.kid)||c.point.kid<1||new Set(c.payers.map(p=>p.kid)).size!==2||c.payers.some(p=>!rid(p.id)||!Number.isSafeInteger(p.kid)||p.kid<1||typeof p.name!=='string'||typeof p.code!=='string')||c.accounts.some(a=>!rid(a.id)||typeof a.name!=='string'||typeof a.description!=='string'||!/^demo\.test\.(point|buyer|multi)(\.v382)?@example\.test$/.test(a.email))||new Set(c.accounts.map(a=>a.id)).size!==3||new Set(c.accounts.map(a=>a.email)).size!==3)fail(503,'INVALID_TEST_CONFIG');
+  if(c.version!==1||!Array.isArray(c.accounts)||c.accounts.length!==3||!Array.isArray(c.payers)||c.payers.length!==2||!rid(c.ownerRole)||!rid(c.point?.id)||!Number.isSafeInteger(c.point.kid)||c.point.kid<1||new Set(c.payers.map(p=>p.kid)).size!==2||c.payers.some(p=>!rid(p.id)||!Number.isSafeInteger(p.kid)||p.kid<1||typeof p.name!=='string'||typeof p.code!=='string')||c.accounts.some(a=>!rid(a.id)||typeof a.name!=='string'||typeof a.description!=='string'||!/^demo\.test\.(point|buyer|multi)(\.v38[23])?@example\.test$/.test(a.email))||new Set(c.accounts.map(a=>a.id)).size!==3||new Set(c.accounts.map(a=>a.email)).size!==3)fail(503,'INVALID_TEST_CONFIG');
   return c;
 }
 function expected(c,i){const all=p=>({payer:p.id,scope:'all',kis_client_id:0,client:''});return i===0?[{payer:c.payers[0].id,scope:'client',kis_client_id:c.point.kid,client:c.point.id}]:i===1?[all(c.payers[0])]:c.payers.map(all);}
@@ -25,7 +25,7 @@ module.exports.handle=(e,login)=>{
   try{
     if(e.request.url.rawQuery)fail(400,'INVALID_PARAMETERS');
     const c=config(e.app);
-    if(!login){const accounts=[];c.accounts.forEach((a,i)=>{try{check(e.app,c,i);accounts.push({id:a.id,name:a.name,email:a.email,description:a.description,preferredPayer:c.payers[0].id,preferredClient:c.point.kid,...(c.history?{preferredDate:c.history.proofs[0].day,preferredGroup:c.history.proofs[0].group}:{})});}catch(_){}});return e.json(200,{environment:c.environment,accounts});}
+    if(!login){const accounts=[];c.accounts.forEach((a,i)=>{try{check(e.app,c,i);const proof=(c.buyers||c.history)?.proofs?.[0];accounts.push({id:a.id,name:a.name,email:a.email,description:a.description,preferredPayer:c.payers[0].id,preferredClient:c.point.kid,...(proof?{preferredDate:proof.day,preferredGroup:proof.group}:{})});}catch(_){}});return e.json(200,{environment:c.environment,accounts});}
     const origin=e.request.header.get('Origin');if(origin&&origin!=='http://'+e.request.host&&origin!=='https://'+e.request.host)fail(403,'ACCESS_DENIED');
     const b=e.requestInfo().body;if(!b||Object.keys(b).join(',')!=='id')fail(400,'INVALID_PARAMETERS');
     const i=c.accounts.findIndex(a=>a.id===b.id);if(i<0)fail(403,'ACCESS_DENIED');

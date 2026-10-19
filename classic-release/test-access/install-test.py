@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-time installation on the explicitly authorized TEST KIS VM. No PB password."""
+"""Shared test mapping/deployment helpers. The original 381 CLI is retired."""
 import argparse, datetime, hashlib, importlib.util, json, os, pathlib, secrets, shutil, sqlite3, subprocess, urllib.request
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1]
@@ -158,23 +158,7 @@ def deploy(root, config, manifest, backup_parent=None):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--apply', action='store_true')
-    args = parser.parse_args()
-    root = pathlib.Path('/opt/pocketbase')
-    if args.apply and os.geteuid() != 0:
-        raise RuntimeError('Run once using sudo')
-    subprocess.run(['python3', str(SOURCE / 'scripts/install.py')], check=True)
-    manifest = json.loads((SOURCE / 'MANIFEST.json').read_text())
-    config = plan(root, seed.Api())
-    print('TEST_MANAGER:', config['managerOwner'] or 'not assigned (no unique active Менеджер Каравай or no manager_owner field)')
-    if not args.apply:
-        print('TEST_PREFLIGHT_OK: buyers 2/3, recipient 2; no changes')
-        return
-    backup = deploy(root, config, manifest)
-    print('TEST_3.8.1_READY: http://192.168.25.98:8090/ — three buttons, no login password')
-    print('BACKUP:', backup)
-    print('KIS reads and three logins verified. Installation creates no orders; submit an order in the client.')
+    raise SystemExit('The old 381 manufacturer scenarios are retired. Use Karavay-Real-Buyers-20261019.ps1 / install-buyers.py.')
 
 if __name__ == '__main__':
     main()

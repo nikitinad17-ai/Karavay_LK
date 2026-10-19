@@ -8,6 +8,10 @@ BASE = 'http://127.0.0.1:18947'
 BINARY = os.environ['PB_BINARY']
 spec = importlib.util.spec_from_file_location('setup', HERE / 'install-test.py')
 setup = importlib.util.module_from_spec(spec); spec.loader.exec_module(setup)
+buyer_mode = bool(os.environ.get('BUYER_SELECTION'))
+if buyer_mode:
+    buyer_setup = setup.module('buyer_installer', HERE / 'install-buyers.py')
+    buyer_setup.setup = setup
 
 def call(path, body=None, token='', method=None, expected=200, headers=None):
     req = urllib.request.Request(BASE + path, data=None if body is None else json.dumps(body).encode(), method=method,
@@ -28,16 +32,18 @@ with tempfile.TemporaryDirectory(prefix='karavay-test-access-') as temp:
     shutil.copy2(ROOT / 'pb_public/index.html', d / 'pb_public/index.html')
     shutil.copy2(ROOT / 'pb_migrations/1792000000_classic_order_requests.js', d / 'pb_migrations')
     docs = {}
-    for kid, name, clients in ((2, 'ОАО"Каравай"', [2, 234243]), (3, 'АО "ПАЛЯНИЦА"', [384786, 385317])):
+    for kid, name, clients in ((2, 'ОАО"Каравай"', [2, 234243]), (3, 'АО "ПАЛЯНИЦА"', [384786, 385317]), *(((500001, 'Fixture customer A', [501011, 501012]), (500002, 'Fixture customer B', [502011, 502012])) if buyer_mode else ())):
         docs['/payers/' + str(kid)] = {'id': kid, 'kod': '000' + str(kid + 4), 'name': name, 'state': 1}
         points = []
         for cid in clients:
             point = {'id': cid, 'kod': 'C' + str(cid), 'name': name + ' · ' + str(cid), 'adres': 'Адрес КИС', 'payer_id': kid, 'state': 1, 'ord_min_sum': 200, 'ord_min_sum_flg_nds': 1}
             points.append(point); docs['/clients/' + str(cid)] = point
         docs['/payers/' + str(kid) + '/clients'] = points
+    docs['/payers'] = [value for key, value in docs.items() if key.startswith('/payers/') and key.count('/') == 2]
     (d / 'kis.json').write_text(json.dumps(docs))
     history_mode = bool(os.environ.get('HISTORY_SELECTION'))
     if history_mode: (d / 'history-mode').write_text('yes')
+    if buyer_mode: (d / 'buyer-mode').write_text('yes')
     (d / 'bin/curl').write_text('''#!/usr/bin/env python3
 import datetime,json,pathlib,sys
 root=pathlib.Path(__file__).resolve().parents[1]
@@ -47,7 +53,7 @@ last=root/'last.json'
 if '--data-raw' in sys.argv:
  assert p=='/orders' and not any('Authorization' in x for x in sys.argv)
  body=json.loads(sys.argv[sys.argv.index('--data-raw')+1]);assert set(body)=={'Id_clt','DateOrd','Product'}
- assert body['Id_clt']==(234243 if (root/'history-mode').exists() else 2) and body['Product']==[{'Id_prd':66,'KolSht':8}]
+ assert body['Id_clt']==(502011 if (root/'buyer-mode').exists() else 234243 if (root/'history-mode').exists() else 2) and body['Product']==[{'Id_prd':66,'KolSht':8}]
  assert not last.exists(),'duplicate KIS POST'
  last.write_text(json.dumps(body));data={'Id_ord':7};status=201
 elif '/matrix?' in p:data=[{'id_prd':66,'kod_prod':'1263','nameprod':'Хлеб из КИС','vesprod':.5,'srok':72,'kolukl':8,'cenaotp':34.9,'basecenaotp':40,'procskd':0,'kolshtordmin':4},{'id_prd':67,'kod_prod':'LOT8','nameprod':'Только лотками из КИС','kolukl':8,'cenaotp':30,'kolshtordmin':None}]
@@ -89,20 +95,29 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             # Same setup code used by the VM installer; KIS reads only are substituted here.
             class Kis:
                 def call(self, path, **kw):
-                    assert kw == {'kis':True}; return docs[path]
+                    assert kw == {'kis':True}
+                    if '/matrix?' in path: return [{'id_prd':66,'kolukl':8,'kolshtordmin':4,'cenaotp':34.9}]
+                    return docs[path]
             chosen = None
-            if history_mode:
+            if history_mode or buyer_mode:
                 # Upgrade from the previous version in the SAME database.
                 previous_config = setup.plan(d, Kis())
                 proc.terminate(); proc.wait(timeout=10)
                 (d / 'pb_data/karavay-test-access.json').write_text(json.dumps(previous_config))
                 shutil.copy2(HERE / setup.MIGRATION, d / 'pb_migrations')
                 proc = start()
+                if buyer_mode:
+                    previous_auth = call('/service/test-access', {'id': previous_config['accounts'][0]['id']})
+                    env['PREVIOUS_TEST_SESSION'] = json.dumps({'token': previous_auth['token'], 'id': previous_auth['record']['id'], 'email': previous_auth['record']['email'], 'test': True})
                 old_snapshot = {c:call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] for c in ('users','rights','payers','clients')}
-                tomorrow = (int(time.time()+10800)//86400+1)*86400-10800
-                chosen = [{'payer':docs['/payers/'+str(k)],'point':docs['/clients/'+str(cid)],'order_id':oid,'history_count':1,'day':__import__('datetime').datetime.fromtimestamp(tomorrow+10800,__import__('datetime').timezone.utc).strftime('%Y-%m-%d'),'stamp':tomorrow,'group':1} for k,cid,oid in [(2,234243,8),(3,384786,9)]]
-                setup.MIGRATION = '1792260000_test_history_users.js'
-            config = setup.plan(d, Kis(), chosen)
+                if buyer_mode:
+                    chosen = buyer_setup.selection.select(Kis(), emit=lambda _: None)
+                    setup.MIGRATION = buyer_setup.MIGRATION
+                else:
+                    tomorrow = (int(time.time()+10800)//86400+1)*86400-10800
+                    chosen = [{'payer':docs['/payers/'+str(k)],'point':docs['/clients/'+str(cid)],'order_id':oid,'history_count':1,'day':__import__('datetime').datetime.fromtimestamp(tomorrow+10800,__import__('datetime').timezone.utc).strftime('%Y-%m-%d'),'stamp':tomorrow,'group':1} for k,cid,oid in [(2,234243,8),(3,384786,9)]]
+                    setup.MIGRATION = '1792260000_test_history_users.js'
+            config = buyer_setup.plan(d, Kis(), chosen) if buyer_mode else setup.plan(d, Kis(), chosen)
             assert config['managerOwner'] == manager
             proc.terminate(); proc.wait(timeout=10)
             (d / 'pb_data/karavay-test-access.json').write_text(json.dumps(config))
@@ -110,7 +125,8 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             proc = start()
             accounts = call('/service/test-access')['accounts']
             assert len(accounts) == 3
-            if history_mode:
+            if buyer_mode: call('/service/test-access', {'id': previous_config['accounts'][0]['id']}, expected=403)
+            if history_mode or buyer_mode:
                 for c, values in old_snapshot.items():
                     current = {r['id']:r for r in call('/api/collections/'+c+'/records?perPage=200', token=admin)['items']}
                     assert all(current[v['id']]==v for v in values), 'Existing records changed: '+c
@@ -132,7 +148,8 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             (d/'invalid-wrapper').write_text('yes');call(q,token=token,expected=502);(d/'invalid-wrapper').unlink()
             if not history_mode:(d/'wrapper').unlink()
 
-            call('/service/order-options?payer='+p1+'&client='+str(2 if history_mode else 234243), token=token, expected=403)
+            another = next(p['id'] for p in docs['/payers/'+str(config['payers'][0]['kid'])+'/clients'] if p['id'] != config['point']['kid'])
+            call('/service/order-options?payer='+p1+'&client='+str(another), token=token, expected=403)
             for i, a in enumerate(accounts):
                 t = call('/service/test-access', {'id':a['id']})['token']
                 assert len(call('/service/context', token=t)['payers']) == (2 if i == 2 else 1)
@@ -148,7 +165,7 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
                 call('/api/collections/'+collection+'/records/'+rid, {field:not off}, admin, 'PATCH')
             # Reboot and installer repeat preserve users, passwords and rights.
             before = {c:call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] for c in ('users','rights','payers','clients')}
-            assert setup.plan(d, Kis(), chosen) == config
+            assert (buyer_setup.plan(d, Kis(), chosen) if buyer_mode else setup.plan(d, Kis(), chosen)) == config
             proc.terminate(); proc.wait(timeout=10); proc = start()
             after = {c:call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] for c in before}
             assert before == after
@@ -163,8 +180,16 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
                 elif args[1] == 'start': running[0] = start()
                 else: raise AssertionError(args)
             setup.base.run = systemctl
+            if buyer_mode:
+                (d / 'pocketbase').symlink_to(BINARY)
+                setup.base.run = lambda *args: subprocess.run(args, check=True, capture_output=True, text=True) if args[0] != 'systemctl' else systemctl(*args)
+                manifest = buyer_setup.preflight(d)
+                setup.base.run = systemctl
+                saved_verify = setup.verify
+                setup.verify = lambda c, m: (saved_verify(c, m), buyer_setup.verify(c, m))
+            else:
+                manifest = json.loads((ROOT / 'MANIFEST.json').read_text())
             (d / 'backups').mkdir()
-            manifest = json.loads((ROOT / 'MANIFEST.json').read_text())
             try:
                 setup.deploy(d, config, manifest, d / 'backups')
                 # A failed update restores the exact preceding client and retains orders.
@@ -184,12 +209,23 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
                 for c in before:
                     assert call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] == before[c]
                 print('PASS: actual installer deploy, verification and failed-update rollback; prior HTML, users, rights and accepted order retained.')
+                if buyer_mode:
+                    import unittest.mock as mock
+                    buyer_setup.ROOT = d
+                    setup.verify = saved_verify
+                    setup.base.run = lambda *args: subprocess.run(args, check=True, capture_output=True, text=True) if args[0] != 'systemctl' else systemctl(*args)
+                    with mock.patch.object(sys, 'argv', ['install-buyers.py', '--apply']), mock.patch.object(setup.seed, 'Api', Kis):
+                        buyer_setup.main()
+                    for c in before:
+                        assert call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] == before[c]
+                    assert (d / 'pb_public/index.html').read_bytes() == previous
+                    print('PASS: complete buyer installer main/apply/repeat, saved KIS selection, gateway catalogs, isolation; current HTML/users/rights/order retained.')
                 # ClientOnly dispatch uses this unchanged core installer. Exercise its
                 # real main/apply path; substitute only VM paths, URL and systemctl.
                 (d / 'pb_public/index.html').write_bytes((ROOT / 'pb_public/index.html').read_bytes())
-                (d / 'pocketbase').symlink_to(BINARY)
+                if not (d / 'pocketbase').exists(): (d / 'pocketbase').symlink_to(BINARY)
                 source = d / 'client-package'; source.mkdir()
-                core_manifest = json.loads(json.dumps(manifest))
+                core_manifest = json.loads((ROOT / 'MANIFEST.json').read_text())
                 for name in core_manifest['package']:
                     target = source / name; target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(ROOT / name, target)

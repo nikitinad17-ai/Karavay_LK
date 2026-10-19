@@ -9,7 +9,7 @@ import urllib.error, urllib.parse, urllib.request
 PB = 'http://127.0.0.1:8090'
 KIS = 'http://serv15db:55580/api/v1'
 STATE = pathlib.Path.home() / '.karavay-other-demos-20261015.json'
-EXCLUDED_IDS = {300182, 299271}
+EXCLUDED_IDS = {2, 3, 300182, 299271}
 ACCOUNTS = [
     {'name': 'Два других покупателя КИС (демо)', 'email': 'demo.multi.kis@karavay.example', 'login': 'demo_multi_kis_20261015'},
     {'name': 'Одна торговая точка КИС (демо)', 'email': 'demo.point.kis@karavay.example', 'login': 'demo_point_kis_20261015'},
@@ -84,7 +84,7 @@ def valid_id(value):
 
 def excluded(buyer):
     name = re.sub(r'[^А-ЯA-Z0-9]', '', str(buyer.get('name', '')).upper().replace('Ё', 'Е'))
-    return buyer.get('id') in EXCLUDED_IDS or 'НЕВА' in name or 'ПРОМТЕХСБЫТ' in name
+    return buyer.get('id') in EXCLUDED_IDS or any(s in name for s in ('КАРАВАЙ','ПАЛЯНИЦ','НЕВА','ПРОМТЕХСБЫТ','KARAVAY','KARAVAI','PALYAN','PALIAN'))
 
 
 def checked_list(rows, maximum):
@@ -140,7 +140,7 @@ def recipients(api, payer, wanted=None):
 
 def choose(api):
     directory = checked_list(api.call('/payers', kis=True), 10000)
-    print('Получен полный справочник КИС:', len(directory), 'покупателей. НЕВА и ПРОМТЕХСБЫТ исключены.', flush=True)
+    print('Получен справочник КИС:', len(directory), 'записей. Каравай, Паляница, НЕВА и ПРОМТЕХСБЫТ исключены.', flush=True)
     eligible = []
     for index, row in enumerate(directory):
         if excluded(row):

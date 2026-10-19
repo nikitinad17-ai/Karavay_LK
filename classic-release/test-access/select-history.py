@@ -7,7 +7,7 @@ def positive(n):
 def eligible(p, require_active=True):
     name = re.sub('[^А-ЯA-Z0-9]', '', str(p.get('name', '')).upper().replace('Ё', 'Е'))
     active = p.get('state') == 1 if require_active else p.get('state') in (None, 1)
-    return positive(p.get('id')) and active and p.get('id') not in (299271, 300182) and 'НЕВА' not in name and 'ПРОМТЕХСБЫТ' not in name and bool(p.get('kod')) and bool(p.get('name'))
+    return positive(p.get('id')) and active and p.get('id') not in (2, 3, 299271, 300182) and not any(s in name for s in ('КАРАВАЙ','ПАЛЯНИЦ','НЕВА','ПРОМТЕХСБЫТ','KARAVAY','KARAVAI','PALYAN','PALIAN')) and bool(p.get('kod')) and bool(p.get('name'))
 
 def rows(api, path):
     value = api.call(path, kis=True)
