@@ -9,6 +9,7 @@ BINARY = os.environ['PB_BINARY']
 spec = importlib.util.spec_from_file_location('setup', HERE / 'install-test.py')
 setup = importlib.util.module_from_spec(spec); spec.loader.exec_module(setup)
 buyer_mode = bool(os.environ.get('BUYER_SELECTION'))
+price_error = buyer_mode and bool(os.environ.get('BUYER_PRICE_ERROR'))
 if buyer_mode:
     buyer_setup = setup.module('buyer_installer', HERE / 'install-buyers.py')
     buyer_setup.setup = setup
@@ -44,13 +45,17 @@ with tempfile.TemporaryDirectory(prefix='karavay-test-access-') as temp:
     history_mode = bool(os.environ.get('HISTORY_SELECTION'))
     if history_mode: (d / 'history-mode').write_text('yes')
     if buyer_mode: (d / 'buyer-mode').write_text('yes')
+    if price_error: (d / 'price-error').write_text('yes')
     (d / 'bin/curl').write_text('''#!/usr/bin/env python3
 import datetime,json,pathlib,sys
 root=pathlib.Path(__file__).resolve().parents[1]
 p=sys.argv[sys.argv.index('--url')+1].split('/api/v1',1)[1]
 docs=json.loads((root/'kis.json').read_text());status=200
 last=root/'last.json'
+if '/matrix?' in p and (root/'price-error').exists():
+ print(json.dumps({'success':False,'error':{'code':'-20001','message':'3002 Бублики Украинские. Не определена цена.'}}),end='\\n__KIS_HTTP__:400');sys.exit(0)
 if '--data-raw' in sys.argv:
+ assert not (root/'price-error').exists(), 'No order POST allowed during buyer-login test'
  assert p=='/orders' and not any('Authorization' in x for x in sys.argv)
  body=json.loads(sys.argv[sys.argv.index('--data-raw')+1]);assert set(body)=={'Id_clt','DateOrd','Product'}
  assert body['Id_clt']==(502011 if (root/'buyer-mode').exists() else 234243 if (root/'history-mode').exists() else 2) and body['Product']==[{'Id_prd':66,'KolSht':8}]
@@ -96,7 +101,9 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             class Kis:
                 def call(self, path, **kw):
                     assert kw == {'kis':True}
-                    if '/matrix?' in path: return [{'id_prd':66,'kolukl':8,'kolshtordmin':4,'cenaotp':34.9}]
+                    if '/matrix?' in path:
+                        if price_error: raise setup.seed.Failure('HTTP 400 при ' + path.split('?')[0] + ' | KIS: 3002 Бублики Украинские. Не определена цена.')
+                        return [{'id_prd':66,'kolukl':8,'kolshtordmin':4,'cenaotp':34.9}]
                     return docs[path]
             chosen = None
             if history_mode or buyer_mode:
@@ -154,7 +161,7 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
                 t = call('/service/test-access', {'id':a['id']})['token']
                 assert len(call('/service/context', token=t)['payers']) == (2 if i == 2 else 1)
             if os.environ.get('QUICK_CHROME'):
-                subprocess.run(['node', str(HERE / 'test-browser.cjs'), BASE, json.dumps(config)], check=True, env=env)
+                subprocess.run(['node', str(HERE / ('test-buyer-logins.cjs' if price_error else 'test-browser.cjs')), BASE, json.dumps(config)], check=True, env=env)
             # Disabled account, right, role and payer cannot use passwordless access.
             first = config['accounts'][0]
             for collection, rid, field in [('users',first['id'],'active'), ('users',first['id'],'must_change_password'), ('rights',first['rights'][0],'active'), ('roles',owner,'active'), ('payers',p1,'active')]:
@@ -205,10 +212,11 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
                 finally:
                     setup.verify = verify
                 assert (d / 'pb_public/index.html').read_bytes() == previous
-                assert (d / 'last.json').exists() if os.environ.get('QUICK_CHROME') else True
+                if os.environ.get('QUICK_CHROME'):
+                    assert (d / 'last.json').exists() is not price_error
                 for c in before:
                     assert call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] == before[c]
-                print('PASS: actual installer deploy, verification and failed-update rollback; prior HTML, users, rights and accepted order retained.')
+                print('PASS: actual installer deploy, verification and failed-update rollback; prior HTML, users, rights and order data retained.')
                 if buyer_mode:
                     import unittest.mock as mock
                     buyer_setup.ROOT = d
@@ -219,7 +227,7 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
                     for c in before:
                         assert call('/api/collections/'+c+'/records?perPage=200', token=admin)['items'] == before[c]
                     assert (d / 'pb_public/index.html').read_bytes() == previous
-                    print('PASS: complete buyer installer main/apply/repeat, saved KIS selection, gateway catalogs, isolation; current HTML/users/rights/order retained.')
+                    print('PASS: complete buyer installer main/apply/repeat, saved selection and gateway scopes despite catalog failures; current HTML/users/rights/order data retained.')
                 # ClientOnly dispatch uses this unchanged core installer. Exercise its
                 # real main/apply path; substitute only VM paths, URL and systemctl.
                 (d / 'pb_public/index.html').write_bytes((ROOT / 'pb_public/index.html').read_bytes())

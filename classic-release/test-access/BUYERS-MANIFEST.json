@@ -3,10 +3,10 @@
   "files": {
     "pb_hooks/karavay-test-access.js": "753ff0f4136b7cf2861dfac44c26d6d6091219df358991360656e2bbac3a478a",
     "test-access/install-test.py": "58eddeb6998ddfd6a0d9fa30373fba3ff2eb435abad8fe4bdcf7f46fce32662c",
-    "test-access/install-buyers.py": "4a3d5d3c5c975e614f66bca80c9893adf6e60439be93844df2253507512b006d",
-    "test-access/select-buyers.py": "49e83750afd00717e628979dfe23bbe961e595042308741b2bd935d542380b21",
+    "test-access/install-buyers.py": "63a6f581ea68bbdb9dec92267fb446f9c957bd9f98a85258bb832689a74ca385",
+    "test-access/select-buyers.py": "17b098fe3f15d4932ad85bf445ab14856870a87aae11e4ec09561f33899e4237",
     "test-access/1792400000_test_buyer_users.js": "1dd3c228099f64b4ff81b4d1a609bd7d43c83e8bfb5b43c1e9929f5cd2030876",
-    "test-access/BUYERS-3.8.3.md": "ef9d37fc1e7c89e89000d6a403f8d337393342f4bd2bb72888f047f9dcb9e9cd",
+    "test-access/BUYERS-3.8.3.md": "0beccf6ec993f5aa3f182d0a959d7a2df7c214646b2977fcdd36e09fd3df0591",
     "scripts/install.py": "364521f737110064d46c1207703e994395be1f55c7821b7bbc9534c8483c818c",
     "scripts/Seed-Demo-Users.py": "e26e647bd586b6025006d24003908f660ab225aaa4aaa4573a0caa62c16763c5"
   },

@@ -1,8 +1,8 @@
 """Read-only selection from KIS payers; excludes the owner's known non-customers.
 
 The available API has no manufacturer/customer flag. Never infer one from a code
-prefix. Verify payer cards, recipient ownership and a usable dated catalog.
-History and order creation are deliberately independent of this selection.
+prefix. Verify payer cards and active recipient ownership.
+Catalog, history and order creation are independent of account selection.
 """
 import datetime
 import math
@@ -65,18 +65,11 @@ def select(api, saved=None, seconds=900, emit=print):
             point = api.call('/clients/' + str(row['id']), kis=True)
             if not valid(point, pid) or point['id'] != row['id']:
                 continue
-            for group in (1, 0):
-                check_time()
-                matrix = api.call('/clients/' + str(point['id']) + '/matrix?DateOrd=' + str(stamp) + '&Group=' + str(group), kis=True)
-                if not isinstance(matrix, list) or len(matrix) > 10000:
-                    raise RuntimeError('Invalid KIS catalog')
-                if any(usable(p) for p in matrix):
-                    points.append({'point': point, 'group': group})
-                    break
+            points.append({'point': point, 'group': 1})
             if len(points) == (len(wanted) if wanted is not None else 2):
                 break
         if wanted is not None and {p['point']['id'] for p in points} != set(wanted):
-            raise RuntimeError('Saved recipients/catalog unavailable; selection not silently changed')
+            raise RuntimeError('Saved recipients unavailable; selection not silently changed')
         return {'payer': payer, 'points': points, 'point': points[0]['point'], 'day': day,
                 'stamp': stamp, 'group': points[0]['group']} if points else None
     proofs = saved.get('buyers', {}).get('proofs') if isinstance(saved, dict) else None
@@ -104,7 +97,7 @@ def select(api, saved=None, seconds=900, emit=print):
             candidate = verify(row['id'])
             if candidate:
                 chosen.append(candidate)
-                emit('BUYER_VERIFIED: ' + candidate['payer']['name'] + ' | KIS ' + str(row['id']) + ' | usable recipients ' + str(len(candidate['points'])))
+                emit('BUYER_VERIFIED: ' + candidate['payer']['name'] + ' | KIS ' + str(row['id']) + ' | active recipients ' + str(len(candidate['points'])))
                 first = next((c for c in chosen if len(c['points']) >= 2), None)
                 if first and len(chosen) >= 2:
                     return [first, next(c for c in chosen if c['payer']['id'] != first['payer']['id'])]
@@ -116,4 +109,30 @@ def select(api, saved=None, seconds=900, emit=print):
             repeats[signature] = repeats.get(signature, 0) + 1
             if repeats[signature] >= 3:
                 break
-    raise RuntimeError('BUYER_SCENARIOS_NOT_FOUND: need two buyers and at least two usable recipients of the first; read errors=' + str(errors) + '. No users/configuration changed.')
+    raise RuntimeError('BUYER_SCENARIOS_NOT_FOUND: need two buyers and at least two active recipients of the first; read errors=' + str(errors) + '. No users/configuration changed.')
+
+def probe_catalogs(api, chosen, emit=print):
+    """Diagnostic only. A catalog failure never changes the selected identities.
+
+    No price/product is repaired or fabricated. Try the other documented group
+    and report the result separately from passwordless account installation.
+    """
+    for candidate in chosen:
+        candidate['catalog_available'] = False
+        cid = candidate['point']['id']
+        for group in (1, 0):
+            emit('CATALOG_CHECK: client ' + str(cid) + ' | Group ' + str(group))
+            try:
+                matrix = api.call('/clients/' + str(cid) + '/matrix?DateOrd=' + str(candidate['stamp']) + '&Group=' + str(group), kis=True)
+                if not isinstance(matrix, list) or len(matrix) > 10000:
+                    raise RuntimeError('Invalid KIS catalog')
+                if not any(usable(p) for p in matrix):
+                    raise RuntimeError('No usable priced products for this date/group')
+                candidate['catalog_available'] = True
+                candidate['group'] = group
+                emit('CATALOG_AVAILABLE: client ' + str(cid) + ' | Group ' + str(group))
+                break
+            except Exception as error:
+                emit('CATALOG_WARNING: client ' + str(cid) + ' | Group ' + str(group) + ' | ' + str(error)[:1400])
+        if not candidate['catalog_available']:
+            emit('CATALOG_UNAVAILABLE: client ' + str(cid) + ' | accounts will still be installed; no substitute prices')

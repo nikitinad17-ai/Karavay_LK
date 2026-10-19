@@ -21,16 +21,17 @@ def payer(pid, name):
 docs = { '/payers': [payer(2, 'Manufacturer A'), payer(3, 'Manufacturer B'),
     payer(900009, 'ОАО «Каравай»'), payer(900008, 'АО ПАЛЯНИЦА'),
     payer(900007, 'ООО НЕВА'), payer(900006, 'ПРОМТЕХСБЫТ'),
-    payer(800003, 'No usable packing'), payer(800002, 'Foreign recipient'),
+    payer(800003, 'HTTP fixture customer without prices'), payer(800002, 'Foreign recipient'),
     payer(800001, 'HTTP fixture customer A'), payer(700001, 'HTTP fixture customer B')] }
 for p in docs['/payers']:
     pid = p['id']; docs['/payers/' + str(pid)] = p
     points = [{'id': pid + n, 'payer_id': pid if pid != 800002 else 123,
-               'kod': 'C' + str(pid + n), 'name': 'Fixture point ' + str(n), 'state': 1} for n in (10, 11)]
+               'kod': 'C' + str(pid + n), 'name': 'Fixture point ' + str(n), 'state': 1} for n in ((100, 101) if pid == 800002 else (10, 11))]
     docs['/payers/' + str(pid) + '/clients'] = points
     for point in points:
         docs['/clients/' + str(point['id'])] = point
 calls = []
+catalog_failure = True
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_): pass
     def do_POST(self):
@@ -40,7 +41,10 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.removeprefix('/api/v1'); calls.append(path)
         assert '/orders' not in path, 'Selection unexpectedly depends on history'
         if '/matrix?' in path:
-            cid = int(path.split('/')[2]); data = [{'id_prd': 66, 'kolukl': None if cid in (800013, 800014) else 8, 'kolshtordmin': None, 'cenaotp': 34.9}]
+            if catalog_failure:
+                body = json.dumps({'success': False, 'error': {'code': '-20001', 'message': '3002 Бублики Украинские 1с 0.1 уп.2шт.19.10.26. Не определена цена.', 'details': 'private-oracle-stack'}}).encode()
+                self.send_response(400); self.end_headers(); self.wfile.write(body); return
+            cid = int(path.split('/')[2]); data = [{'id_prd': 66, 'kolukl': None if cid in (800013, 800014) and path.endswith('Group=1') else 8, 'kolshtordmin': None, 'cenaotp': 34.9}]
         else: data = docs[path]
         body = json.dumps({'success': True, 'data': data}).encode()
         self.send_response(200); self.end_headers(); self.wfile.write(body)
@@ -51,17 +55,28 @@ try:
     with patch.object(seed, 'KIS', 'http://127.0.0.1:' + str(server.server_port) + '/api/v1'):
         api = seed.Api(); api.token = 'must-stay-local'
         selected = s.select(api, emit=lambda _: None)
-        assert [c['payer']['id'] for c in selected] == [800001, 700001]
+        assert [c['payer']['id'] for c in selected] == [800003, 800001]
+        assert not any('/matrix?' in path for path in calls), 'Price read gates account selection'
         assert len(selected[0]['points']) == 2 and all(c['stamp'] % 86400 == 75600 for c in selected)
         assert all(not any(path.startswith('/payers/' + str(pid) + '/') or path == '/payers/' + str(pid) for path in calls) for pid in (2, 3, 900009, 900008, 900007, 900006))
         saved = {'buyers': {'version': 1, 'proofs': [{'payer_kid': c['payer']['id'], 'clients': [p['point']['id'] for p in c['points']]} for c in selected]}}
-        assert [c['payer']['id'] for c in s.select(api, saved, emit=lambda _: None)] == [800001, 700001]
-        original = copy.deepcopy(docs['/clients/800011'])
-        docs['/clients/800011']['state'] = 0
+        assert [c['payer']['id'] for c in s.select(api, saved, emit=lambda _: None)] == [800003, 800001]
+        messages = []
+        s.probe_catalogs(api, selected, messages.append)
+        assert [c['payer']['id'] for c in selected] == [800003, 800001]
+        assert all(c['catalog_available'] is False for c in selected)
+        assert sum('/matrix?' in path for path in calls) == 4
+        assert sum('CATALOG_WARNING' in m and 'Не определена цена' in m for m in messages) == 4
+        assert all('private-oracle-stack' not in m and 'must-stay-local' not in m for m in messages)
+        catalog_failure = False
+        s.probe_catalogs(api, selected, lambda _: None)
+        assert all(c['catalog_available'] is True for c in selected) and selected[0]['group'] == 0
+        original = copy.deepcopy(docs['/clients/800013'])
+        docs['/clients/800013']['state'] = 0
         try:
             s.select(api, saved, emit=lambda _: None); raise AssertionError('Saved inactive point accepted')
         except RuntimeError as error: assert 'Saved' in str(error)
-        docs['/clients/800011'] = original
+        docs['/clients/800013'] = original
         original = docs['/payers']; docs['/payers'] = [payer(2, 'Manufacturer A'), payer(3, 'Manufacturer B')]
         try:
             s.select(api, emit=lambda _: None); raise AssertionError('Manufacturers chosen as fallback')
@@ -74,4 +89,4 @@ for row in [payer(2, 'anything'), payer(3, 'anything'), payer(300182, 'anything'
 assert not s.usable({'id_prd': 1, 'cenaotp': 1, 'kolukl': None, 'kolshtordmin': None})
 assert s.usable({'id_prd': 1, 'cenaotp': 1, 'kolukl': None, 'kolshtordmin': 0})
 assert s.usable({'id_prd': 1, 'cenaotp': 1, 'kolukl': 8, 'kolshtordmin': None})
-print('PASS: actual HTTP reader; manufacturers/rejected buyers excluded by ID and names; ownership, usable lots/pieces, two customers, two first-customer points, saved-scope checks; no history reads, POST or PB-token forwarding.')
+print('PASS: actual HTTP reader; customer/recipient selection independent of catalog; four captured-style HTTP 400 price failures do not change/block accounts; separate warnings and Group 0 probe; manufacturer/ownership/saved-scope guards; no history, POST, token or SQL-detail leaks.')

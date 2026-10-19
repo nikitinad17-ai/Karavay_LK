@@ -44,6 +44,7 @@ zipfile.ZipFile(p).extractall('/home/lindevadmin/karavay-buyers-20261019')
 '@
 [IO.File]::WriteAllText($taskUnpack, $taskPython, [Text.Encoding]::ASCII)
 Write-Host 'Three new passwordless demo scenarios. KIS reads only; no history scan or order creation.'
+Write-Host 'Catalog/price failures are reported separately and do not block account creation.'
 Write-Host 'Known manufacturers KARAVAY/PALYANITSA and rejected NEVA/PROMTEHSBYT are excluded.'
 Write-Host 'SSH/sudo request the VM password. No PocketBase or demo passwords are required.'
 & scp $taskZip $taskUnpack 'lindevadmin@192.168.25.98:/home/lindevadmin/'
@@ -57,6 +58,6 @@ try {
 Write-Host 'READY. Reload the cabinet and select one of the three new demo logins.'
 Start-Process 'http://192.168.25.98:8090/'
 '''.replace('__PAYLOAD__', base64.b64encode(raw).decode()).replace('__SHA256__', digest)
-target = output / 'Karavay-Real-Buyers-20261019.ps1'
+target = output / 'Karavay-Real-Buyers-20261019-Fix.ps1'
 target.write_text(script, encoding='ascii', newline='\r\n')
 print(target)

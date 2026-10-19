@@ -58,7 +58,7 @@ def plan(root, api, chosen):
     config.pop('history')
     config['buyers'] = {'version': 1, 'proofs': [{'payer_kid': c['payer']['id'],
         'clients': [p['point']['id'] for p in c['points']], 'day': c['day'],
-        'stamp': c['stamp'], 'group': c['group']} for c in chosen]}
+        'stamp': c['stamp'], 'group': c['group'], 'catalog_available': c.get('catalog_available', False)} for c in chosen]}
     for account, slug in zip(config['accounts'], ('point', 'buyer', 'multi')):
         account.update(id='test383' + slug + '001', login='kis_test_' + slug + '_v383',
                        email='demo.test.' + slug + '.v383@example.test',
@@ -102,14 +102,10 @@ def verify(config, manifest):
                 cursor = page['nextCursor']
             if not set(wanted) <= set(directory):
                 raise RuntimeError('Buyer scenario recipient missing through gateway')
-            suffix = '?payer=' + payer + '&client=' + str(wanted[0])
-            catalog = setup.api_call('/service/catalog' + suffix + '&DateOrd=' + str(proof['stamp']) + '&Group=' + str(proof['group']), token=token)
-            if not catalog.get('products'):
-                raise RuntimeError('Buyer scenario catalog missing through gateway')
         if i == 0:
             forbidden = config['buyers']['proofs'][0]['clients'][1]
             try:
-                setup.api_call('/service/catalog?payer=' + config['payers'][0]['id'] + '&client=' + str(forbidden), token=token)
+                setup.api_call('/service/order-options?payer=' + config['payers'][0]['id'] + '&client=' + str(forbidden), token=token)
                 raise RuntimeError('Single-point account can read another recipient')
             except urllib.error.HTTPError as error:
                 if error.code != 403:
@@ -137,6 +133,7 @@ def main():
         raise RuntimeError('Existing explicitly enabled TEST KIS configuration required')
     api = setup.seed.Api()
     chosen = selection.select(api, saved)
+    selection.probe_catalogs(api, chosen)
     config = plan(root, api, chosen)
     for account in config['accounts']:
         print('DEMO_SCENARIO:', account['email'], '|', account['description'], flush=True)
@@ -153,7 +150,9 @@ def main():
         verify(c, m)
     setup.verify = extended
     backup = setup.deploy(root, config, manifest)
-    print('BUYER_SCENARIOS_READY: 3 passwordless demo logins; buyer cards, recipients and catalog verified')
+    print('BUYER_SCENARIOS_READY: 3 passwordless demo logins; buyer cards, active recipients and access scopes verified')
+    if any(not c['catalog_available'] for c in chosen):
+        print('CATALOG_ATTENTION: KIS catalog is unavailable for some selected recipients; accounts are ready, prices were not substituted')
     print('BACKUP:', backup)
     print('Reload the cabinet. Previous test sessions are cleared by the existing client on refresh.')
     print('Existing users/passwords/rights, client HTML and manager files retained. No KIS order requests sent.')
