@@ -42,9 +42,9 @@ with tempfile.TemporaryDirectory(prefix='manager-workspace-08-') as temp:
  # complete manager UI is used verbatim. Client 3.8 UI is tested in its branch.
  client='<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'self\'; connect-src \'self\'; style-src \'unsafe-inline\'"></head><body><h1>Fixture client</h1></body></html>'
  (public/'index.html').write_text(client);quick.CLIENT_SHA=hashlib.sha256(client.encode()).hexdigest()
- buyers=[{'id':i,'kod':'P'+str(i),'name':name,'state':1} for i,name in [(2,'Fixture Karavay'),(3,'Fixture Palyanitsa'),(4,'Fixture available buyer'),(5,'Fixture foreign buyer')]]
+ buyers=[{'id':i,'kod':'P'+str(i),'name':name,'state':1} for i,name in [(22,'Fixture buyer 22'),(23,'Fixture buyer 23'),(4,'Fixture available buyer'),(5,'Fixture foreign buyer')]]
  docs={'/payers':buyers}
- for p,ids in [(buyers[0],[2,234243]),(buyers[1],[384786,385317]),(buyers[2],[41]),(buyers[3],[51])]:
+ for p,ids in [(buyers[0],[2201,2202]),(buyers[1],[2301,2302]),(buyers[2],[41]),(buyers[3],[51])]:
   pid=p['id'];docs['/payers/'+str(pid)]=p;points=[]
   for cid in ids:
    point={'id':cid,'payer_id':pid,'state':1,'kod':'C'+str(cid),'name':'Fixture point '+str(cid),'adres':'Fixture address'}
@@ -83,16 +83,16 @@ print(json.dumps({'success':True,'data':json.loads((pathlib.Path(__file__).resol
    foreign=api.create('payers',{'id_pay':5,'kod_pay':'P5','name_pay':'Fixture foreign buyer','active':True})['id']
    api.create('rights',{'user':other,'payer':foreign,'scope':'all','kis_client_id':0,'client':'','active':True})
    snap=lambda:{c:api.rows(c,'') for c in ['users','rights','payers','clients']}
-   before=snap();report=setup.configure(api,False,output_dir=folder,public_url=BASE)
+   before=snap();report=setup.configure(api,False,output_dir=folder,public_url=BASE,payer_ids=(22,23),client_id=2201)
    assert report['status']=='read_only' and before==snap() and not (folder/'Karavay-Manager-Access.html').exists()
-   report=setup.configure(api,True,output_dir=folder,public_url=BASE)
+   report=setup.configure(api,True,output_dir=folder,public_url=BASE,payer_ids=(22,23),client_id=2201)
    assert report['demo']=='ready' and report['manager']['id']==mid
    original_quick_state=quick.STATE;quick.STATE=folder/'.karavay-quick-users-20261016.json'
    plan=quick.load_plan();quick.STATE=original_quick_state
    users=api.rows('users','manager_owner = '+json.dumps(mid));assert len(users)==3
    token=call('/api/collections/users/auth-with-password',{'identity':'real_manager@example.test','password':password})['token']
    state=call('/service/manager/state',token=token)
-   assert state['version']=='0.8.1' and state['manager']['email']=='real_manager@example.test' and len(state['users'])==3
+   assert state['version']=='0.9.0' and state['manager']['email']=='real_manager@example.test' and len(state['users'])==3
    assert foreign not in {p['id'] for p in state['payers']}
    diag_spec=importlib.util.spec_from_file_location('manager_diagnostic',ROOT/'scripts/Check-Manager.py');diag=importlib.util.module_from_spec(diag_spec);diag_spec.loader.exec_module(diag)
    diagnostic_root=folder/'diagnostic';diagnostic_root.mkdir()
@@ -136,7 +136,7 @@ print(json.dumps({'success':True,'data':json.loads((pathlib.Path(__file__).resol
    wrong_user=json.loads(settings);wrong_user['manager_id']=buyer_user;config.write_text(json.dumps(wrong_user))
    assert call('/service/manager/test-login')['enabled'] is False
    call('/service/manager/test-login',{},expected=403,headers={'Origin':BASE});config.write_bytes(settings)
-   ready=snap();setup.configure(api,True,output_dir=folder,public_url=BASE);assert ready==snap()
+   ready=snap();setup.configure(api,True,output_dir=folder,public_url=BASE,payer_ids=(22,23),client_id=2201);assert ready==snap()
    for filename in ['Karavay-Manager-Access.html','Karavay-Test-Login.html','Karavay-Manager-Setup-Report.json']:
     p=folder/filename;assert p.stat().st_mode&0o777==0o600
     text=p.read_text();assert password not in text and admin not in text
@@ -154,10 +154,10 @@ print(json.dumps({'success':True,'data':json.loads((pathlib.Path(__file__).resol
    print('PASS: public test button defaults off, fixed manager/empty input, same-origin only, real static token/8h, inactive/role/password guards, config disable, unchanged passwords/rights.')
    api.call('/api/collections/users/records/'+plan['accounts'][0]['id'],{'active':False},'PATCH')
    disabled=snap()
-   try:setup.configure(api,True,output_dir=folder,public_url=BASE);raise AssertionError('Disabled demo unexpectedly enabled')
+   try:setup.configure(api,True,output_dir=folder,public_url=BASE,payer_ids=(22,23),client_id=2201);raise AssertionError('Disabled demo unexpectedly enabled')
    except setup.Failure as error:assert 'отключён' in str(error)
    assert disabled==snap()
    assert json.loads((folder/'Karavay-Manager-Setup-Report.json').read_text())['demo']=='not_ready'
-   print('PASS: PB 0.40.3 workspace setup: real manager authorization, unchanged password, pinned KIS 2/3, three demo logins/isolation, no duplicates, no foreign scope, private CSP/files, disabled guard, partial-result report.')
+   print('PASS: PB 0.40.3 workspace setup: real manager authorization, unchanged password, explicit KIS fixture 22/23, three demo logins/isolation, no duplicates, no foreign scope, private CSP/files, disabled guard, partial-result report.')
   finally:
    process.terminate();process.wait(timeout=10);server.shutdown()

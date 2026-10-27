@@ -19,10 +19,8 @@ def main():
     args=parser.parse_args()
     if not re.fullmatch('[0-9a-f]{40}',args.revision):raise RuntimeError('Use an exact 40-character Git commit')
     if args.configure and not args.apply:raise RuntimeError('--configure requires --apply')
-    if args.configure and os.geteuid()==0:
-        raise RuntimeError('For the complete setup first run: sudo -iu lindevadmin ; then repeat this command. No service changes were made.')
     stamp=datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    folder=Path.home()/('Karavay-Manager-0.8.1-'+stamp)
+    folder=Path.home()/('Karavay-Manager-0.9.0-'+stamp)
     folder.mkdir(mode=0o700)
     base='https://raw.githubusercontent.com/nikitinad17-ai/Karavay_LK/'+args.revision+'/manager-live/'
     def download(name):
@@ -38,8 +36,8 @@ def main():
     if args.apply:cmd=['sudo',*cmd,'--install']
     subprocess.run(cmd,check=True)
     if args.configure:
-        # Run as the ordinary operator: generated access files stay in their home.
-        subprocess.run(['python3',str(folder/'scripts/Configure-Workspace.py'),'--apply','--run-id','console-'+stamp],check=True)
+        subprocess.run(['python3',str(folder/'scripts/Enable-Test-Login.py'),'--enable'],check=True)
+        subprocess.run(['sudo','python3',str(folder/'scripts/Setup-Recipient-Demos.py'),'--apply','--run-id','console-'+stamp],check=True)
     print('VERIFIED_PACKAGE:',folder)
 
 if __name__=='__main__':

@@ -11,7 +11,7 @@ if (($Install -or $ConfigureWorkspace -or $EnableTestLogin) -and -not $SourceRev
 $revision = if ($SourceRevision) { $SourceRevision } else { 'feature/manager-cabinet-v0.3' }
 $base = 'https://raw.githubusercontent.com/nikitinad17-ai/Karavay_LK/' + $revision + '/manager-live'
 $runId = 'manager-08-' + [Guid]::NewGuid().ToString('N')
-$label = 'Karavay-Manager-0.8.1-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $runId.Substring($runId.Length - 8)
+$label = 'Karavay-Manager-0.9.0-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $runId.Substring($runId.Length - 8)
 $folder = Join-Path (Join-Path $env:USERPROFILE 'Downloads') $label
 New-Item -ItemType Directory -Path $folder | Out-Null
 Invoke-WebRequest -UseBasicParsing -Uri ($base + '/MANIFEST.json') -OutFile (Join-Path $folder 'MANIFEST.json')
@@ -32,53 +32,27 @@ Write-Host ('PACKAGE VERIFIED: ' + $archive)
 if ($CopyToVM -or $Install -or $ConfigureWorkspace -or $EnableTestLogin) {
     $vm = 'lindevadmin@192.168.25.98'
     & scp -r $folder "${vm}:/home/lindevadmin/"
-    if ($LASTEXITCODE -ne 0) { throw 'SSH copy failed. The service was not changed. Use the VM console route in README; no passwords need changing.' }
+    if ($LASTEXITCODE -ne 0) { throw 'SSH copy failed. The service was not changed.' }
     $remote = ''
     if ($Install -or -not ($ConfigureWorkspace -or $EnableTestLogin)) {
         $remote = 'sudo python3 /home/lindevadmin/' + $label + '/scripts/install.py'
         if ($Install) { $remote += ' --install' }
     }
-    if ($ConfigureWorkspace) {
-        if ($remote) { $remote += ' && ' }
-        $remote += 'python3 /home/lindevadmin/' + $label + '/scripts/Configure-Workspace.py --apply --run-id ' + $runId
-    }
-    if ($EnableTestLogin) {
+    if ($EnableTestLogin -or $ConfigureWorkspace) {
         if ($remote) { $remote += ' && ' }
         $remote += 'python3 /home/lindevadmin/' + $label + '/scripts/Enable-Test-Login.py --enable'
     }
-    & ssh -t $vm $remote
-    $vmExit = $LASTEXITCODE
-    if ($vmExit -eq 255) { throw 'SSH authentication/connection failed. The VM console route avoids SSH; see README.' }
-    if ($ConfigureWorkspace -and ($vmExit -eq 0 -or $vmExit -eq 2)) {
-        $privateDir = Join-Path $folder 'Private'
-        New-Item -ItemType Directory -Path $privateDir | Out-Null
-        # Fetch one remote source per scp call. Read the report before any access
-        # file: code 2 can also mean setup stopped before creating a report.
-        $reportPath = Join-Path $privateDir 'Karavay-Manager-Setup-Report.json'
-        & scp "${vm}:/home/lindevadmin/Karavay-Manager-Setup-Report.json" $reportPath
-        if ($LASTEXITCODE -ne 0) { throw ('Setup stopped without a downloadable report (VM code ' + $vmExit + '). Read the server message above. Do not reinstall or recreate accounts blindly.') }
-        $report = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($report.run_id -ne $runId -or $report.version -ne '0.8.1') { throw 'Results belong to an older run; no access file was downloaded or opened.' }
-        if ($report.manager_access -ne 'ready') { throw 'The current report does not confirm manager access; no access file was downloaded or opened.' }
-        if ($vmExit -eq 0 -and $report.demo -ne 'ready') { throw 'VM success and setup report disagree; no access file was downloaded or opened.' }
-        $accessNames = @('Karavay-Manager-Access.html')
-        if ($vmExit -eq 0) { $accessNames += 'Karavay-Test-Login.html' }
-        foreach ($accessName in $accessNames) {
-            & scp "${vm}:/home/lindevadmin/$accessName" (Join-Path $privateDir $accessName)
-            if ($LASTEXITCODE -ne 0) { throw ('Could not download ' + $accessName + '. Setup already ran; do not recreate accounts blindly.') }
-        }
-        Write-Host ('PRIVATE MANAGER ENTRY: ' + (Join-Path $privateDir 'Karavay-Manager-Access.html'))
-        if ($vmExit -eq 0 -and $report.demo -eq 'ready') {
-            Write-Host ('DEMO CLIENT ENTRY: ' + (Join-Path $privateDir 'Karavay-Test-Login.html'))
-            Write-Host 'WORKSPACE READY: manager and three KIS demo accounts verified.'
-        } else { Write-Host 'Manager entry is ready, but demo setup did not finish. Read the VM error above.' }
-        Start-Process (Join-Path $privateDir 'Karavay-Manager-Access.html')
+    if ($ConfigureWorkspace) {
+        if ($remote) { $remote += ' && ' }
+        $remote += 'sudo python3 /home/lindevadmin/' + $label + '/scripts/Setup-Recipient-Demos.py --apply --run-id ' + $runId
     }
-    if ($vmExit -ne 0) { throw ('VM step stopped with code ' + $vmExit + '. Review the last message before retrying.') }
-    if ($EnableTestLogin) {
-        Write-Host 'TEST LOGIN READY: http://192.168.25.98:8090/manager/ - click the test manager button.'
+    & ssh -t $vm $remote
+    if ($LASTEXITCODE -ne 0) { throw ('VM step stopped with code ' + $LASTEXITCODE + '. Read the server message; repeat the same installer to resume. Existing passwords are not reset.') }
+    if ($ConfigureWorkspace) { Write-Host 'RECIPIENT DEMOS READY: two buyers, four recipients, six independent accounts. Open Demo users in the manager.' }
+    if ($EnableTestLogin -or $ConfigureWorkspace) {
+        Write-Host 'TEST LOGIN READY: http://192.168.25.98:8090/manager/'
         Start-Process 'http://192.168.25.98:8090/manager/'
     }
-    if ($Install -and -not ($ConfigureWorkspace -or $EnableTestLogin)) { Write-Host 'Manager installed. Setup/demo was not requested. Refresh /manager/ with Ctrl+Shift+R.' }
+    if ($Install -and -not ($ConfigureWorkspace -or $EnableTestLogin)) { Write-Host 'Manager installed. Refresh /manager/ with Ctrl+Shift+R.' }
     if (-not ($Install -or $ConfigureWorkspace -or $EnableTestLogin)) { Write-Host 'PREFLIGHT PASSED. No service change was made.' }
 }

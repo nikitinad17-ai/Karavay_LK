@@ -12,6 +12,7 @@ function browser({local={},session={},fetcher}={}){
   if(url.includes('/auth-with-password'))return response(200,{token:'issued-token',record:{must_change_password:false}});
   if(url.includes('/auth-refresh'))return response(200,{token:'refreshed-token',record:{must_change_password:false}});
   if(url==='/service/manager/state')return response(200,{manager:{name:'Manager'},payers:[],users:[]});
+  if(url==='/service/manager/demo-accounts')return response(200,{accounts:[]});
   if(url==='/service/manager/directory')return response(200,{buyers:[]});
   if(url==='/service/manager/test-login')return response(200,{enabled:false});
   throw Error('Unexpected URL '+url);

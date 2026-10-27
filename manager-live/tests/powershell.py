@@ -35,9 +35,6 @@ if name=='ssh':
   print('STOPPED: Invalid run ID');sys.exit(2)
  if scenario=='early-fail':
   print('STOPPED: Fixture setup failed before authentication');sys.exit(2)
- report={'run_id':'old-run' if scenario=='stale' else run_id,'version':'0.7.0' if scenario=='wrong-version' else '0.8.1','manager_access':'ready','demo':'not_ready' if scenario in ('partial','inconsistent') else 'ready'}
- (remote/'Karavay-Manager-Setup-Report.json').write_text(json.dumps(report))
- for name in ('Karavay-Manager-Access.html','Karavay-Test-Login.html'):(remote/name).write_text('<!doctype html><p>Fixture only, no access</p>')
  sys.exit(2 if scenario=='partial' else 0)
 if args[0]=='-r':
  assert len(args)==3,args
@@ -98,48 +95,46 @@ with tempfile.TemporaryDirectory(prefix='manager-powershell-') as temp:
         assert len(commands)==1,commands
         command=commands[0]
         assert ('install.py' in command)==install,command
-        assert ('Configure-Workspace.py' in command)==configure,command
+        assert ('Setup-Recipient-Demos.py' in command)==configure,command
         if configure:
             run_id=command.rsplit('--run-id ',1)[1]
             assert re.fullmatch(r'manager-08-[0-9a-f]{32}',run_id),command
-            if not install:assert 'sudo' not in command and '&&' not in command,command
+            assert 'Enable-Test-Login.py --enable' in command
+            assert 'sudo python3' in command
         downloads=[row['args'] for row in calls if row['command']=='scp' and row['args'][0]!='-r']
-        assert all(len(args)==2 for args in downloads),downloads
-        return downloads
+        assert not downloads,downloads
+        return command
 
     calls,opens,_=run(complete,[])
-    assert len(check(calls,install=True,configure=True))==3 and len(opens)==1
+    check(calls,install=True,configure=True)
+    assert opens==['http://192.168.25.98:8090/manager/']
     calls,opens,_=run(complete,['-ResumeSetup'])
-    assert len(check(calls,install=False,configure=True))==3 and len(opens)==1
+    check(calls,install=False,configure=True)
+    assert len(opens)==1
     calls,opens,_=run(complete,['-PreflightOnly'])
-    assert not check(calls,install=True,configure=False) and not opens
-    assert '--install' not in next(row['args'][2] for row in calls if row['command']=='ssh')
-    for scenario,downloads,opened in [('partial',2,1),('early-fail',1,0),('stale',1,0),('wrong-version',1,0),('inconsistent',1,0),('ssh-fail',0,0)]:
-        calls,opens,output=run(complete,['-ResumeSetup'],scenario,1)
-        assert len(check(calls,install=False,configure=True))==downloads and len(opens)==opened,(scenario,calls,opens)
-        if scenario=='early-fail':assert 'Fixture setup failed' in output and 'without a downloadable report' in output
+    command=check(calls,install=True,configure=False)
+    assert '--install' not in command and not opens
+    for scenario in ['partial','early-fail','ssh-fail']:
+        calls,opens,_=run(complete,['-ResumeSetup'],scenario,1)
+        check(calls,install=False,configure=True)
+        assert not opens
     calls,opens,_=run(complete,['-ResumeSetup'],'copy-fail',1)
     assert all(row['command']!='ssh' for row in calls) and not opens
-    calls,opens,_=run(complete,['-ResumeSetup','-PreflightOnly'],expected=1)
-    assert not calls and not opens
+    for args in [['-ResumeSetup','-PreflightOnly'],['-ResumeSetup','-TestLoginOnly']]:
+        calls,opens,_=run(complete,args,expected=1)
+        assert not calls and not opens
     downloader=ROOT/'scripts/Download-Karavay-Manager.ps1'
     for args,install in [(['-Install','-ConfigureWorkspace'],True),(['-ConfigureWorkspace'],False)]:
         calls,opens,_=run(downloader,['-SourceRevision','a'*40,*args])
-        assert len(check(calls,install=install,configure=True))==3 and len(opens)==1
+        check(calls,install=install,configure=True)
+        assert len(opens)==1
     calls,opens,_=run(complete,['-TestLoginOnly'])
-    assert not check(calls,install=True,configure=False) and opens==['http://192.168.25.98:8090/manager/']
-    assert 'Enable-Test-Login.py --enable' in next(row['args'][2] for row in calls if row['command']=='ssh')
+    command=check(calls,install=True,configure=False)
+    assert opens==['http://192.168.25.98:8090/manager/'] and 'Enable-Test-Login.py --enable' in command
     calls,opens,output=run(downloader,['-SourceRevision','a'*40,'-EnableTestLogin'])
-    assert not check(calls,install=False,configure=False) and len(opens)==1
-    assert 'PREFLIGHT PASSED' not in output and 'TEST LOGIN READY' in output
+    check(calls,install=False,configure=False)
+    assert len(opens)==1 and 'TEST LOGIN READY' in output
     calls,opens,_=run(complete,['-TestLoginOnly','-PreflightOnly'])
-    assert not check(calls,install=True,configure=False) and not opens
-    assert 'Enable-Test-Login.py' not in next(row['args'][2] for row in calls if row['command']=='ssh')
-    # Reproduce the shipped failure using the actual old, self-contained file.
-    old=os.environ.get('OLD_PS1')
-    if old:
-        calls,opens,output=run(Path(old),[],expected=1)
-        assert 'Invalid run ID' in output and not opens
-        command=next(row['args'][2] for row in calls if row['command']=='ssh')
-        assert not re.fullmatch(r'[A-Za-z0-9_-]{1,100}',command.rsplit('--run-id ',1)[1])
-    print('PASS:',count,'real PowerShell workflow cases; native argv, setup resume, stale/partial/early failure, private-file exclusion')
+    command=check(calls,install=True,configure=False)
+    assert not opens and 'Enable-Test-Login.py' not in command
+    print('PASS:',count,'real PowerShell workflow cases; native argv, spaces, full/resume/preflight/test-only, failed copy/SSH/setup, no password/access-file downloads')

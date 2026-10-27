@@ -27,7 +27,7 @@ def save_private(path,data):
 
 def provision(api,output_dir):
     state=api.call('/service/manager/state')
-    if state.get('version') not in ('0.7.0','0.7.1','0.8.1'):raise Failure('Сначала установите менеджер 0.7.0.')
+    if state.get('version') not in ('0.7.0','0.7.1','0.8.1','0.9.0'):raise Failure('Сначала установите менеджер 0.7.0.')
     mid=state['manager']['id'];path=pathlib.Path(output_dir)/('karavay-demo-access-'+mid+'.json')
     specs=[{'login':'demo_single_'+mid[:6],'email':'demo.single.'+mid+'@example.test','name':'Один покупатель (демо)','role_code':'owner'}, {'login':'demo_multi_'+mid[:6],'email':'demo.multi.'+mid+'@example.test','name':'Несколько покупателей (демо)','role_code':'viewer'}]
     data={'manager':mid,'accounts':[]}
@@ -83,6 +83,6 @@ def main():
     else:print('DEMO_USERS_READY. Учётные записи уже были настроены. Их существующие пароли не изменены.')
     print('Вымышленная почта example.test не принимает письма. Первый вход и смена пароля: /manager/, затем кабинет клиента /.')
 if __name__=='__main__':
-    try:raise Failure('Для менеджера 0.8.1 используйте scripts/Configure-Workspace.py --apply. Старые отдельные демо больше не создаются.')
+    try:raise Failure('Для менеджера 0.9.0 используйте scripts/Configure-Workspace.py --apply. Старые отдельные демо больше не создаются.')
     except (Failure,KeyError,ValueError,OSError) as e:print('ОСТАНОВЛЕНО:',str(e) if isinstance(e,Failure) else 'Проверьте ответ сервера и приватный файл доступа.',file=sys.stderr);sys.exit(1)
     except KeyboardInterrupt:print('\nОтменено.',file=sys.stderr);sys.exit(130)
