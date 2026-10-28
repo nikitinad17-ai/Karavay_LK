@@ -48,6 +48,7 @@ print(raw,end='\\n__KIS_HTTP__:200')
   admin=request('/api/collections/_superusers/auth-with-password',{'identity':mail,'password':password})['token']
   schema=json.load(open(ROOT/'tests/schema.json'))
   schema[0]['fields']=[f for f in schema[0]['fields'] if f['name']!='account_type']
+  next(f for f in schema[0]['fields'] if f['name']=='password')['min']=12
     # Import returns 204: handle it separately to avoid JSON-decoding empty bodies.
   req=urllib.request.Request(base+'/api/collections/import',data=json.dumps({'collections':schema,'deleteMissing':False}).encode(),headers={'Authorization':admin,'Content-Type':'application/json'},method='PUT')
   try:
@@ -63,7 +64,10 @@ print(raw,end='\\n__KIS_HTTP__:200')
   shutil.copytree(ROOT/'pb_migrations',d/'pb_migrations')
   subprocess.run([BINARY,'migrate','up','--dir',str(d/'pb_data'),'--migrationsDir',str(d/'pb_migrations')],cwd=d,env=env,check=True,stdout=subprocess.DEVNULL)
   subprocess.run([BINARY,'migrate','up','--dir',str(d/'pb_data'),'--migrationsDir',str(d/'pb_migrations')],cwd=d,env=env,check=True,stdout=subprocess.DEVNULL)
-  with sqlite3.connect(d/'pb_data/data.db') as db:assert old_credentials==db.execute('SELECT password,tokenKey FROM users WHERE id=?',(olduser,)).fetchone()
+  with sqlite3.connect(d/'pb_data/data.db') as db:
+   assert old_credentials==db.execute('SELECT password,tokenKey FROM users WHERE id=?',(olduser,)).fetchone()
+   migrated_fields=json.loads(db.execute("SELECT fields FROM _collections WHERE name='users'").fetchone()[0])
+   assert next(f for f in migrated_fields if f['name']=='password')['min']==6
   process=subprocess.Popen([BINARY,'serve','--http=127.0.0.1:18943','--dir',str(d/'pb_data'),'--hooksDir',str(d/'pb_hooks'),'--publicDir',str(d/'pb_public')],cwd=d,env=env,stdout=log,stderr=log)
   for i in range(100):
    try:request('/api/health');break
@@ -172,8 +176,26 @@ print(raw,end='\\n__KIS_HTTP__:200')
   smtp.shutdown();smtp.server_close()
   resetToken=request('/__test_reset/'+resetuid,token=admin)['token']
   check('/api/collections/users/confirm-password-reset',{'token':'invalid','password':password+'reset','passwordConfirm':password+'reset'},t='',expect=400)
-  check('/api/collections/users/confirm-password-reset',{'token':resetToken,'password':password+'reset','passwordConfirm':password+'reset'},t='',expect=204)
-  resetAuth=request('/api/collections/users/auth-with-password',{'identity':'resetcustomer@example.test','password':password+'reset'});assert resetAuth['record']['must_change_password'] is False
+  check('/api/collections/users/confirm-password-reset',{'token':resetToken,'password':'Five5','passwordConfirm':'Five5'},t='',expect=400)
+  check('/api/collections/users/confirm-password-reset',{'token':resetToken,'password':'Reset6','passwordConfirm':'Reset6'},t='',expect=204)
+  resetAuth=request('/api/collections/users/auth-with-password',{'identity':'resetcustomer@example.test','password':'Reset6'});assert resetAuth['record']['must_change_password'] is False
+  # Six characters must pass PB validation as well as the shared custom route; five must fail.
+  short_user={'action':'create_user','name':'Six character password','login':'sixchars','email':'sixchars@example.test','role_code':'owner','account_type':'client','password':'Five5'}
+  check('/service/manager/action',short_user,expect=400)
+  check('/service/manager/action',{**short_user,'password':'Start6'})
+  six_auth=request('/api/collections/users/auth-with-password',{'identity':short_user['email'],'password':'Start6'})
+  assert six_auth['record']['must_change_password'] is True
+  check('/service/account/change-password',{'oldPassword':'Start6','password':'Five5'},t=six_auth['token'],expect=400)
+  check('/service/account/change-password',{'oldPassword':'Start6','password':'Start6'},t=six_auth['token'],expect=400)
+  check('/service/account/change-password',{'oldPassword':'wrong','password':'Next66'},t=six_auth['token'],expect=403)
+  check('/service/account/change-password',{'oldPassword':'Start6','password':'Next66'},t=six_auth['token'])
+  check('/api/collections/users/auth-refresh',{},t=six_auth['token'],expect=401)
+  assert request('/api/collections/users/auth-with-password',{'identity':short_user['email'],'password':'Next66'})['record']['must_change_password'] is False
+  min_manager=user('sixmanager');right(min_manager,p1)
+  manager_auth=auth('sixmanager')
+  check('/service/account/change-password',{'oldPassword':password,'password':'Five5'},t=manager_auth,expect=400)
+  check('/service/account/change-password',{'oldPassword':password,'password':'Next66'},t=manager_auth)
+  assert request('/api/collections/users/auth-with-password',{'identity':'sixmanager@example.test','password':'Next66'})['record']['role_code']=='manager'
   # Removing the last assignment through Edit must retain legacy users in this manager's list.
   for previous_owner in ['',other]:
    login='unassignedlegacy' if not previous_owner else 'unassignedtransfer'
@@ -223,6 +245,13 @@ print(raw,end='\\n__KIS_HTTP__:200')
   cl=check('/service/clients?payer='+p1,t=newauth['token']);assert [c['id'] for c in cl['clients']]==[11,12]
   check('/service/clients?payer='+p2,t=newauth['token'],expect=403)
   subprocess.run(['node',str(ROOT/'tests/client-ui.cjs')],input=json.dumps({'url':base,'email':'new@example.test','password':password+'new'}),text=True,check=True,cwd=ROOT.parent)
+  if os.environ.get('MANAGER_CHROME') and os.environ.get('CLIENT_HTML'):
+   # Serve the separately built current Classic client alongside this manager release.
+   shutil.copyfile(os.environ['CLIENT_HTML'],d/'pb_public/index.html')
+   for login,role in [('browserclient','owner'),('browsermanager','manager')]:
+    browser_user=user(login,role);right(browser_user,p1)
+    req=urllib.request.Request(base+'/api/collections/users/records/'+browser_user,data=json.dumps({'must_change_password':True}).encode(),headers={'Authorization':admin,'Content-Type':'application/json'},method='PATCH');urllib.request.urlopen(req).close()
+   subprocess.run(['node',str(ROOT/'tests/password-browser.cjs')],input=json.dumps({'url':base,'password':password}),text=True,check=True,cwd=ROOT.parent)
   # Native collection writes remain closed to managers.
   check('/api/collections/payers/records',{'id_pay':7},expect=403)
   check('/api/collections/users/records',{'email':'hijack@example.test'},expect=403)

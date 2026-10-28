@@ -122,7 +122,8 @@ class Preflight(unittest.TestCase):
      row=con.execute('SELECT id,fields FROM _collections WHERE name=?',('users',)).fetchone();fields=json.loads(row[1])
      if not any(f['name']=='manager_owner' for f in fields):
       fields.append({'name':'manager_owner','type':'relation','collectionId':row[0],'maxSelect':1,'required':False})
-      con.execute('UPDATE _collections SET fields=? WHERE name=?',(json.dumps(fields),'users'))
+     next(f for f in fields if f['name']=='password')['min']=6
+     con.execute('UPDATE _collections SET fields=? WHERE name=?',(json.dumps(fields),'users'))
    return types.SimpleNamespace(stdout='pocketbase version 0.40.3' if args[-1]=='--version' else 'active')
   class Response:
    status=200

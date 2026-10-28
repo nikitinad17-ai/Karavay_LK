@@ -1,9 +1,9 @@
 {
   "version": "0.9.1",
   "package": {
-    "pb_hooks/karavay-manager.js": "26de9287d78cd9897e6bd0bd64b3ea901ca8ba6f4d11a71fe5279c90747bb801",
+    "pb_hooks/karavay-manager.js": "9b59637780007f83d2037ba7697dc98297ab1ec25ba4cd92e4dcb050abb08a19",
     "pb_hooks/karavay-manager.pb.js": "0509b68593dd8cc967208ab22b8f00eb0704083252d1a8585b18a651d00d2dab",
-    "pb_public/manager/app.js": "fc1a1fe73b371471afd4d9ecf6ccc5b76f49aeade3b923db3c3960cf8116b106",
+    "pb_public/manager/app.js": "52d1223c206e8ff5026debc6f66eeba83847162c192938fadba686b61686bed8",
     "pb_public/manager/index.html": "c97e0b0b391e2748621174c1a750ec85e0a9dc7b3f56ca41986998058efcbf81",
     "pb_public/manager/logo.svg": "81bf7fde81d948a903513f9abf2685ee9dc73753651da2ddbd0bc2baa6ba8df7",
     "pb_public/manager/styles.css": "a2450d6ccb6392609a299d2d029f75cdb9a757dc64c7956e3da7621bc61853c5",
@@ -12,7 +12,8 @@
     "pb_hooks/karavay-manager-test.js": "d5fc144258e3048f1834632996b1d704d7d20d3a3225818bbc28933cf8e51000",
     "pb_hooks/karavay-manager-demos.js": "04d3b7fa54f5ba2041bdb78ea97af8c3a7fb00f40558ef27c6d502f678d49835",
     "pb_public/manager/users.css": "a54bb553465e4e18720ede510fc684a735a77589cc4bd72f41862379443ab0a9",
-    "pb_migrations/1793232000_manager_account_type.js": "a4a89576f1c6577c7ac2dc5aac12c9b47e9e513d874f3a420c9e65768e7d17f3"
+    "pb_migrations/1793232000_manager_account_type.js": "a4a89576f1c6577c7ac2dc5aac12c9b47e9e513d874f3a420c9e65768e7d17f3",
+    "pb_migrations/1793235600_users_password_min6.js": "6701748bfa7907a3e73f5e343d7408a966beb9566bf31501dd1cd727798c4851"
   },
   "gateway": {
     "karavay-context.pb.js": "f72ef461d7b34d4e97f84c461b3d2ff9dd4f1c9402b2f7dfa1ea796270ff9d0f",
@@ -66,7 +67,7 @@
       "active": "bool"
     }
   },
-  "installer_sha256": "d726e55ea26fef83e0464ec8af950220f40cf1f1d67757da4d583ae120f7cc4f",
+  "installer_sha256": "ffc75960bc8e93d3e539021493ce2bb36c65bd96a1712e772c45347787c45d3f",
   "previous": {
     "pb_hooks/karavay-manager.js": [
       "e98ed1ad9de272e5283b251d5c3a072f685293db2cc452b6c90fba97e2cf7b2e",
@@ -79,7 +80,8 @@
       "0936acd58f04a85a764b6d4826df30fcaf288fc32ec6e6e43f23b9788aa3830c",
       "9d3ac9d795e0988c56830f55b8269e22dea91370da01ef4e9b97610aa553856d",
       "45c2d76c107702ac1e3e7fbc9d8c070202a9a30bef92578c91402c22c81bae4e",
-      "316c8e7cba36881e5e2b19d6de965d235aac87fc8f7e177490d19d21bb1d1ce6"
+      "316c8e7cba36881e5e2b19d6de965d235aac87fc8f7e177490d19d21bb1d1ce6",
+      "26de9287d78cd9897e6bd0bd64b3ea901ca8ba6f4d11a71fe5279c90747bb801"
     ],
     "pb_hooks/karavay-manager.pb.js": [
       "abb0e95ef67c81eef2dfdebd8e29b2cf8296be0b64d085cb385d5a60190836ec",
@@ -101,7 +103,8 @@
       "7820ac0aff36e093d11ec7da64595570adf3b49d08a906f8bd7c5210d7e33e95",
       "e31b349a0e6abbb04b684b619574eac96cc8f18d1bd2c83ff9f1faee0a8ef841",
       "06a6e28c38edbfe3bbe48b55ccbf3c354063d8d9928e56f0b00243dbbd061d9e",
-      "ce050d73094927735ccdfcc7e256c959a9bc1e65207668a8ae28526f3c24073c"
+      "ce050d73094927735ccdfcc7e256c959a9bc1e65207668a8ae28526f3c24073c",
+      "fc1a1fe73b371471afd4d9ecf6ccc5b76f49aeade3b923db3c3960cf8116b106"
     ],
     "pb_public/manager/index.html": [
       "aeea602983172740027fa5f112edfe4b71627b8e0885d6208e285faa8d7dce09",
