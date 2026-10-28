@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Install additive manager files. Default is read-only preflight.
 Run on the VM: sudo python3 install.py --install
-Existing gateway files and collection definitions are never replaced.
+Existing gateway files and business records are preserved.
+Migrations add manager metadata and set users.password.min to 6.
 """
 import argparse,hashlib,json,pathlib,shutil,subprocess,datetime,urllib.request,urllib.error,os
 SOURCE=pathlib.Path(__file__).resolve().parents[1]
@@ -15,7 +16,7 @@ def main():
  for name,digest in manifest['gateway'].items():
   installed=sha(root/'pb_hooks'/name)
   if name!='karavay-orders.pb.js' and installed not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Installed gateway differs: '+name+'. Re-export hooks before proceeding.')
- print('Only manager metadata is added. Existing users, auth roles, rights and client files are preserved.')
+ print('PLAN: update manager metadata and users password minimum to 6. Preserve existing passwords, roles, rights and client files.')
  db=root/'pb_data/data.db'
  if not db.is_file():raise RuntimeError('Database not found')
  # Read definitions only. No data is read, exported or changed during preflight.
@@ -38,9 +39,13 @@ def main():
    if fields.get(name,{}).get('type')!=kind:raise RuntimeError('Schema mismatch: '+col+'.'+name)
  version=run(str(root/'pocketbase'),'--version').stdout
  if '0.40.3' not in version:raise RuntimeError('Expected PocketBase 0.40.3; found '+version.strip())
+ conflicts=[]
  for name in manifest['package']:
   dst=root/name
-  if dst.exists() and sha(dst) not in [manifest['package'][name],*manifest.get('previous',{}).get(name,[])]:raise RuntimeError('Manager file already differs: '+name+'. Review before replacing.')
+  if dst.exists():
+   installed=sha(dst)
+   if installed not in [manifest['package'][name],*manifest.get('previous',{}).get(name,[])]:conflicts.append(name+'; SHA256='+installed)
+ if conflicts:raise RuntimeError('Manager file already differs; no files replaced. Review before replacing:\n'+'\n'.join(conflicts))
  run('systemctl','is-active','pocketbase')
  managed_hooks={pathlib.Path(name).name for name in manifest['package'] if name.startswith('pb_hooks/')}
  protected=[p for p in (root/'pb_hooks').iterdir() if p.is_file() and p.name not in managed_hooks]
@@ -81,6 +86,7 @@ def main():
   fields=json.loads(con.execute("SELECT fields FROM _collections WHERE name='users'").fetchone()[0]);con.close()
   if not any(f['name']=='manager_owner' and f['type']=='relation' for f in fields):raise RuntimeError('Ownership migration was not applied')
   if not any(f['name']=='account_type' and f['type']=='select' and f.get('values')==['client','payer'] for f in fields):raise RuntimeError('Account type migration was not applied')
+  if not any(f['name']=='password' and f['type']=='password' and f.get('min')==6 for f in fields):raise RuntimeError('Password minimum migration was not applied')
   for name,digest in manifest['gateway'].items():
    expected=preserved[str(root/'pb_hooks'/name)] if name=='karavay-orders.pb.js' else (digest if isinstance(digest,list) else [digest])
    if sha(root/'pb_hooks'/name) not in (expected if isinstance(expected,list) else [expected]):raise RuntimeError('Gateway changed unexpectedly')
@@ -100,6 +106,6 @@ def main():
    if name in existing:shutil.copy2(backup/name,dst)
    else:dst.unlink(missing_ok=True)
   run('systemctl','start','pocketbase')
-  print('ROLLED_BACK: manager files restored. Database snapshot retained (additive ownership field may remain) at',backup)
+  print('ROLLED_BACK: manager files restored. Database snapshot retained (manager metadata and password minimum may remain) at',backup)
   raise
 if __name__=='__main__':main()

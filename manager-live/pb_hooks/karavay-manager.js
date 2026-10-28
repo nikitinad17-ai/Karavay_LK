@@ -192,7 +192,7 @@ function mutate(e,b) {
   if(['create_user','edit_user'].includes(b.action)) input=userInput(app,b);
   if(b.action==='set_rights')target(app,m,b.user);
   if(b.action==='create_user'||b.action==='set_rights'||(b.action==='edit_user'&&b.rights!==undefined))prepared=assignments(app,m,b.rights===undefined&&b.action==='create_user'?[]:b.rights);
-  if(b.action==='create_user' && (typeof b.password!=='string'||b.password.length<12||b.password.length>128))fail(400,'PASSWORD_TOO_SHORT');
+  if(b.action==='create_user' && (typeof b.password!=='string'||b.password.length<6||b.password.length>128))fail(400,'PASSWORD_TOO_SHORT');
   if(b.action==='attach_client')picked=selected(area(m,b.payer,false,true),b.kis_client_id);
   if(b.action==='reset_password'){
     const t=target(app,m,b.user);if(t.user.get('active')!==true)fail(403,'ACCESS_DENIED');
@@ -230,6 +230,7 @@ function mutate(e,b) {
         typeMatches(data.account_type===undefined?u.get('account_type'):data.account_type,rs);
         if(u.get('email')!==data.email)u.setVerified(false);for(const k of Object.keys(data))u.set(k,data[k]);
         if(b.active!==undefined){if(typeof b.active!=='boolean')fail(400,'INVALID_INPUT');u.set('active',b.active);}
+        if(prepared&&!rs.length)u.set('manager_owner',uid);
         u.refreshTokenKey();tx.save(u);if(prepared)saveRights(tx,u.id,rs);
       }else if(b.action==='delete_user'){
         if(b.confirm_login!==u.get('login'))fail(400,'INVALID_INPUT');
@@ -287,7 +288,7 @@ function route(e,kind) {
     if(e.request.url.rawQuery)fail(400,'INVALID_PARAMETERS');
     const b=e.requestInfo().body;
     if(kind==='password'){
-      if(!b || typeof b.oldPassword!=='string'||typeof b.password!=='string'||b.password.length<12||b.password.length>128||b.password===b.oldPassword)fail(400,'INVALID_PASSWORD');
+      if(!b || typeof b.oldPassword!=='string'||typeof b.password!=='string'||b.password.length<6||b.password.length>128||b.password===b.oldPassword)fail(400,'INVALID_PASSWORD');
       e.app.runInTransaction(tx=>{
         const u=record(tx,'users',e.auth.id);if(u.get('active')!==true || !u.validatePassword(b.oldPassword))fail(403,'ACCESS_DENIED');
         u.setPassword(b.password);u.set('must_change_password',false);u.refreshTokenKey();tx.save(u);

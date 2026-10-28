@@ -9,6 +9,7 @@ import json
 import pathlib
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import types
@@ -96,6 +97,26 @@ class Preflight(unittest.TestCase):
    self.preflight()
   self.assertEqual(before,self.snapshot())
 
+ def test_reports_all_unknown_manager_files_without_writes(self):
+  names=['pb_hooks/karavay-manager.js','pb_public/manager/app.js']
+  for name in names:(self.root/name).write_text('unknown '+name)
+  before=self.snapshot()
+  with self.assertRaises(RuntimeError) as raised:self.preflight()
+  for name in names:
+   self.assertIn(name+'; SHA256='+before[name],str(raised.exception))
+  self.assertEqual(before,self.snapshot())
+
+ def test_accepts_published_092_without_writes(self):
+  revision='bff8d2ca92b9e9c5a038364dee6f207abcc58d00'
+  manifest=json.loads(subprocess.check_output(['git','show',revision+':manager-live/MANIFEST.json'],cwd=SOURCE.parent))
+  for name,digest in manifest['package'].items():
+   raw=subprocess.check_output(['git','show',revision+':manager-live/'+name],cwd=SOURCE.parent)
+   self.assertEqual(hashlib.sha256(raw).hexdigest(),digest)
+   (self.root/name).write_bytes(raw)
+  before=self.snapshot()
+  self.assertIn('PREFLIGHT: PASSED',self.preflight())
+  self.assertEqual(before,self.snapshot())
+
  def test_install_refuses_nonproduction_root_without_writes(self):
   before=self.snapshot()
   with self.assertRaisesRegex(RuntimeError,'Installation allowed only|Installation requires sudo'):
@@ -122,7 +143,8 @@ class Preflight(unittest.TestCase):
      row=con.execute('SELECT id,fields FROM _collections WHERE name=?',('users',)).fetchone();fields=json.loads(row[1])
      if not any(f['name']=='manager_owner' for f in fields):
       fields.append({'name':'manager_owner','type':'relation','collectionId':row[0],'maxSelect':1,'required':False})
-      con.execute('UPDATE _collections SET fields=? WHERE name=?',(json.dumps(fields),'users'))
+     next(f for f in fields if f['name']=='password')['min']=6
+     con.execute('UPDATE _collections SET fields=? WHERE name=?',(json.dumps(fields),'users'))
    return types.SimpleNamespace(stdout='pocketbase version 0.40.3' if args[-1]=='--version' else 'active')
   class Response:
    status=200
