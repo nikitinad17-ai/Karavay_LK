@@ -15,6 +15,7 @@ export const getSession=()=>session;
 export function clearSession(){session=null;for(const storage of [sessionStorage,localStorage])try{storage.removeItem(KEY);}catch{}}
 export class ApiError extends Error {constructor(public status:number,public code:string){super(code);}}
 const explanations:Record<string,string>={
+ INVALID_PASSWORD:'Новый пароль должен содержать от 6 до 128 символов и отличаться от текущего.',
  PRICE_CHANGED:'Цена изменилась. Обновите прайс-лист и проверьте заказ.',
  PRODUCT_UNAVAILABLE:'Товар больше недоступен для этой даты. Обновите прайс-лист.',
  MINIMUM_QUANTITY:'Количество меньше минимального. Проверьте позиции заказа.',

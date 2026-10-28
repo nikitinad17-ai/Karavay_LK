@@ -1,14 +1,14 @@
 {
   "version": "3.8.5",
   "status": "ready-for-vm-verification",
-  "html_sha256": "adf852a36796e8406ed1f36b517bbee833dc17269df399c1f2dcd4b63846dd25",
+  "html_sha256": "216bc84350b883086737325aa949505653aceda9e7d29b1a6480ef1026060fa6",
   "design": "3.6.4",
   "create_order_enabled": true,
   "order_lines_enabled": true,
   "live_kis_post_verified": false,
   "manager_modified": false,
   "package": {
-    "pb_public/index.html": "adf852a36796e8406ed1f36b517bbee833dc17269df399c1f2dcd4b63846dd25",
+    "pb_public/index.html": "216bc84350b883086737325aa949505653aceda9e7d29b1a6480ef1026060fa6",
     "pb_hooks/karavay-checkout.js": "0bb795c729485e1e6ec3ef14a56455762d9ee788d59c94476a84d1ec1a06d56e",
     "pb_hooks/karavay-order-details.pb.js": "1525522db03cb5dee38e18e03fdd19210dbc833ff657e2270ed4340fe4009d88",
     "pb_hooks/karavay-orders.pb.js": "7d600e8a8216f9ab5a84fffe790304ae1fbaadf1bf8324f9449392d7c69652d4",
@@ -34,6 +34,7 @@
       "664c97a27bde4a91a6b6f9ea8d9a38c7dda799ec0a89b8dbf484901bc7929d8f"
     ],
     "pb_public/index.html": [
+      "adf852a36796e8406ed1f36b517bbee833dc17269df399c1f2dcd4b63846dd25",
       "82593d4b3ae76b058786cffadffdf0c5739e1ee0867908366492c82d1b409a6a",
       "f360ac9030f35615c577d7dcd5af94801abf6108ea43d0a6bf12477faba70e6f",
       "15400446e03c69e118fcd1c0a6edf3b9f4415694368b2c27f7c66513ab5d2f93",
