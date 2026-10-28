@@ -89,8 +89,8 @@ print(json.dumps({'success':data is not None,'data':data}),end='\\n__KIS_HTTP__:
     threading.Thread(target=kis.serve_forever, daemon=True).start()
     api = setup.Api(BASE, 'http://127.0.0.1:'+str(kis.server_address[1]))
     env = dict(os.environ, PATH=str(root/'bin')+':'+os.environ['PATH'])
-    password = secrets.token_urlsafe(24)
-    subprocess.run([BINARY, 'superuser', 'upsert', 'admin@example.test', password, '--dir', str(root/'pb_data')], check=True, stdout=subprocess.DEVNULL)
+    password = 'Test-'+secrets.token_urlsafe(24)
+    subprocess.run([BINARY, 'superuser', 'upsert', 'admin@example.test', password, '--dir', str(root/'pb_data')], check=True, stdout=subprocess.DEVNULL, cwd=root)
     log = (folder/'pb.log').open('w')
     process = None
     def start():
@@ -175,7 +175,7 @@ print(json.dumps({'success':data is not None,'data':data}),end='\\n__KIS_HTTP__:
         assert len(accounts) == 6 and sum(a['scope'] == 'recipient' for a in accounts) == 4
         assert all(x['address'] for a in accounts for x in a['clients'])
         state = call('/service/manager/state', token=manager_token)
-        assert len(state['users']) == 6 and state['version'] == '0.9.1'
+        assert len(state['users']) == 6 and state['version'] == '0.9.2'
         # Repeating setup reuses all IDs and does not rotate passwords/token keys.
         with mock.patch.object(setup.subprocess, 'run', side_effect=service_run):
             setup.configure(root, api, True, BASE, 'fixture-repeat')
