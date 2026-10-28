@@ -18,8 +18,10 @@ p=sys.argv[sys.argv.index('--url')+1].split('/api/v1',1)[1]
 mode=(root/'mode').read_text();status=200
 if '--data-raw' in sys.argv:
  assert p=='/orders' and not any('Authorization' in x for x in sys.argv)
- body=json.loads(sys.argv[sys.argv.index('--data-raw')+1]);assert set(body)=={'Id_clt','DateOrd','Product'}
- assert body['Id_clt']==300183 and set(body['Product'][0])=={'Id_prd','KolSht'}
+ body=json.loads(sys.argv[sys.argv.index('--data-raw')+1]);assert set(body)=={'client_id','order_date','products'}
+ assert body['client_id']==300183 and all(set(p)=={'id','kol_sht'} for p in body['products'])
+ import datetime
+ assert datetime.datetime.fromisoformat(body['order_date']).strftime('%Y-%m-%dT00:00:00')==body['order_date']
  with (root/'count').open('r+') as f:
   fcntl.flock(f,fcntl.LOCK_EX);n=int(f.read());f.seek(0);f.write(str(n+1));f.truncate()
  if mode=='timeout':sys.exit(28)
@@ -41,7 +43,7 @@ elif p=='/orders/7':
  data={'id':7,'client_id':300183,'order_number':948,'order_date':'2026-10-03T00:00:00','kol_sht':15,'sum_all':917.4,'create_date':'2026-10-02T14:17:34','state':0,'products':[{'id':425162,'product_kod':'7485','product_name':'Хлеб из КИС','cena_otp':61.16,'kol_sht':15,'kol_vzv':0,'sum_all':917.4}],'private_field':'must not leave server'}
  if (root/'last.json').exists():
   import datetime
-  last=json.loads((root/'last.json').read_text());qty=last['Product'][0]['KolSht'];data['products'][0]['kol_sht']=qty;data['kol_sht']=qty;data['order_date']=datetime.datetime.fromtimestamp(last['DateOrd']+10800,datetime.timezone.utc).strftime('%Y-%m-%dT00:00:00')
+  last=json.loads((root/'last.json').read_text());qty=last['products'][0]['kol_sht'];data['products'][0]['kol_sht']=qty;data['kol_sht']=qty;data['order_date']=last['order_date']
  if mode=='foreign':data['client_id']=299300
 elif p=='/orders/8':data={'id':8,'client_id':299300,'products':[]}
 else:data=None
@@ -116,7 +118,7 @@ print(json.dumps({'success':True,'data':data}),end='\\n__KIS_HTTP__:'+str(status
             (d/'lot-only').write_text('8');before=count()
             b={**body,'products':[{**body['products'][0],'quantity':24}]}
             post(b);assert count()==before+1
-            assert json.loads((d/'last.json').read_text())['Product']==[{'Id_prd':425162,'KolSht':24}]
+            assert json.loads((d/'last.json').read_text())['products']==[{'id':425162,'kol_sht':24}]
             (d/'lot-only').unlink()
             request('/api/collections/roles/records/'+role,{'active':False},admin,'PATCH');request('/service/order-options'+q,token=token,expected=403)
             request('/api/collections/roles/records/'+role,{'active':True},admin,'PATCH')

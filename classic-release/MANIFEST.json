@@ -9,7 +9,7 @@
   "manager_modified": false,
   "package": {
     "pb_public/index.html": "216bc84350b883086737325aa949505653aceda9e7d29b1a6480ef1026060fa6",
-    "pb_hooks/karavay-checkout.js": "0bb795c729485e1e6ec3ef14a56455762d9ee788d59c94476a84d1ec1a06d56e",
+    "pb_hooks/karavay-checkout.js": "8427e0ccdc7796e880f201b6749df99d22308beefbe8480033f8e715df9e8a70",
     "pb_hooks/karavay-order-details.pb.js": "1525522db03cb5dee38e18e03fdd19210dbc833ff657e2270ed4340fe4009d88",
     "pb_hooks/karavay-orders.pb.js": "7d600e8a8216f9ab5a84fffe790304ae1fbaadf1bf8324f9449392d7c69652d4",
     "pb_hooks/karavay-test-access.js": "aa4d7f22c525eb8c7a8c4a43e4c8a22ed5072b9c2e60f265f7a8e0f2a0a0ff0e",
@@ -23,6 +23,7 @@
   },
   "previous": {
     "pb_hooks/karavay-checkout.js": [
+      "0bb795c729485e1e6ec3ef14a56455762d9ee788d59c94476a84d1ec1a06d56e",
       "0e645047adbdae5b004c752e11ddb32e43fd76e5b243802200cc9b7e4061b750",
       "dbf3abc45b85692d1dc5bfe5e9293198a737d996e7ec862dd6b20ba8681ea40b"
     ],
