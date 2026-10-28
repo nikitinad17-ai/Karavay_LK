@@ -230,6 +230,7 @@ function mutate(e,b) {
         typeMatches(data.account_type===undefined?u.get('account_type'):data.account_type,rs);
         if(u.get('email')!==data.email)u.setVerified(false);for(const k of Object.keys(data))u.set(k,data[k]);
         if(b.active!==undefined){if(typeof b.active!=='boolean')fail(400,'INVALID_INPUT');u.set('active',b.active);}
+        if(prepared&&!rs.length)u.set('manager_owner',uid);
         u.refreshTokenKey();tx.save(u);if(prepared)saveRights(tx,u.id,rs);
       }else if(b.action==='delete_user'){
         if(b.confirm_login!==u.get('login'))fail(400,'INVALID_INPUT');

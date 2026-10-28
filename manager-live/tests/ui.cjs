@@ -17,6 +17,19 @@ const settings=JSON.parse(fs.readFileSync(0,'utf8'));
  row().querySelector('[data-edit-user]').click();assert.equal(q('[name=account_type]').value,'client');assert(!q('#rights-list'));q('.edit-access').open=true;await wait(()=>q('#rights-list'));
  const a=all('.assignment').find(r=>r.textContent.includes('P1 —'));a.querySelector('.payer-check').click();await wait(()=>a.querySelector('.rc[value="11"]'));a.querySelector('.rc[value="11"]').click();a.querySelector('.rc[value="12"]').click();submit();
  await wait(()=>!q('#dialog').open);await wait(()=>row()?.textContent.includes('CL11')&&row()?.textContent.includes('CL12'));assert.equal(row().querySelector('[data-label="Покупатели (код)"]').textContent,'—');
+ // Change the type after assignments are loaded: regenerate valid scopes without losing checked recipients.
+ for(const kind of ['payer','client']){
+  row().querySelector('[data-edit-user]').click();q('.edit-access').open=true;await wait(()=>q('#rights-list'));
+  q('[name=account_type]').value=kind;q('[name=account_type]').dispatchEvent(new w.Event('change',{bubbles:true}));
+  const assigned=all('.assignment').find(r=>r.querySelector('.payer-check').checked);
+  assert.equal(assigned.querySelector('.rs').value,kind==='payer'?'all':'client');
+  await wait(()=>assigned.querySelector('.rc[value="11"]')&&!assigned.querySelector('[data-candidates]').disabled);
+  if(kind==='client')assigned.querySelector('.rc[value="11"]').checked=true;
+  submit();await wait(()=>!q('#dialog').open);
+  await wait(()=>row()?.textContent.includes(kind==='payer'?'Покупатель (Payer)':'Получатель (Client)'));
+  const saved=requests.filter(r=>r.body?.action==='edit_user').at(-1).body;
+  assert.equal(saved.account_type,kind);assert(saved.rights.every(r=>r.scope===(kind==='payer'?'all':'client')));
+ }
  row().querySelector('[data-info]').click();assert(q('#save').hidden);assert(q('#dialog').textContent.includes('Получатель (Client)'));q('#cancel').click();
  q('#role-filter').value='client';q('#role-filter').dispatchEvent(new w.Event('change'));assert(row());q('#role-filter').value='payer';q('#role-filter').dispatchEvent(new w.Event('change'));assert(!row());q('#role-filter').value='';q('#role-filter').dispatchEvent(new w.Event('change'));
  row().querySelector('[data-edit-user]').click();q('[name=email]').value='not-saved@example.test';let prompted=false;w.confirm=()=>{prompted=true;return false;};q('#close').click();assert(prompted&&q('#dialog').open);w.confirm=()=>true;q('#close').click();assert(!q('#dialog').open);

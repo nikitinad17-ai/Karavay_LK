@@ -174,6 +174,18 @@ print(raw,end='\\n__KIS_HTTP__:200')
   check('/api/collections/users/confirm-password-reset',{'token':'invalid','password':password+'reset','passwordConfirm':password+'reset'},t='',expect=400)
   check('/api/collections/users/confirm-password-reset',{'token':resetToken,'password':password+'reset','passwordConfirm':password+'reset'},t='',expect=204)
   resetAuth=request('/api/collections/users/auth-with-password',{'identity':'resetcustomer@example.test','password':password+'reset'});assert resetAuth['record']['must_change_password'] is False
+  # Removing the last assignment through Edit must retain legacy users in this manager's list.
+  for previous_owner in ['',other]:
+   login='unassignedlegacy' if not previous_owner else 'unassignedtransfer'
+   existing=user(login,'owner');right(existing,p1)
+   if previous_owner:
+    req=urllib.request.Request(base+'/api/collections/users/records/'+existing,data=json.dumps({'manager_owner':previous_owner}).encode(),headers={'Authorization':admin,'Content-Type':'application/json'},method='PATCH');urllib.request.urlopen(req).close()
+   assert any(u['id']==existing and u['editable'] for u in check('/service/manager/state')['users'])
+   check('/service/manager/action',{'action':'edit_user','user':existing,'name':login,'login':login,'email':login+'@example.test','role_code':'owner','rights':[]})
+   unassigned=next(u for u in check('/service/manager/state')['users'] if u['id']==existing)
+   assert unassigned['rights']==[] and unassigned['editable']
+   assert existing not in [u['id'] for u in check('/service/manager/state',t=other_token)['users']]
+   check('/service/manager/action',{'action':'set_rights','user':existing,'rights':[{'payer':p1,'scope':'all','kis_client_id':0}]})
   # Client/Payer selection persists before rights exist. Higher auth roles remain forbidden.
   body={'action':'create_user','name':'Simple client','login':'simpleclient','email':'simple.client@example.test','role_code':'owner','account_type':'client','password':password}
   simple=check('/service/manager/action',body)['id']

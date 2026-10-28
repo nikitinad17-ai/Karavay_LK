@@ -194,6 +194,7 @@ async function fillAssignments(){
 async function openAssignments(u,created=false){assignmentSeed=created&&pendingUserContext?[{payer:pendingUserContext.payer,scope:pendingUserContext.client?'client':state.payers.find(p=>p.id===pendingUserContext.payer)?.access==='all'?'all':'client',kis_client_id:pendingUserContext.client||0,active:true}]:[];openEditor('set_rights',(created?'Пользователь создан · ':'')+'Покупатели и получатели', '<p role="status">Загружаем справочник КИС…</p>',u);$('#save').textContent='Сохранить доступ';await fillAssignments();}
 function readRights(){return [...document.querySelectorAll('.assignment')].filter(r=>r.querySelector('.payer-check').checked).flatMap(r=>{
  const p=assignmentPayers.find(p=>p.key===r.dataset.key),scope=r.querySelector('.rs').value,base=p.id?{payer:p.id}:{kis_payer_id:p.id_pay};
+ if(!['client','all'].includes(scope))throw Error('Нет права назначить всех получателей для '+p.name+'. Выберите конкретных получателей или снимите покупателя.');
  if(scope==='all')return [{...base,scope,kis_client_id:0}];
  const ids=[...r.querySelectorAll('.rc:checked')].map(c=>Number(c.value));if(!ids.length)throw Error('Отметьте хотя бы одного получателя для '+p.name+'.');
  return ids.map(kis_client_id=>({...base,scope,kis_client_id}));
@@ -252,7 +253,12 @@ $('#content').addEventListener('click',e=>{const b=e.target.closest('button');if
 $('#close').onclick=close;$('#cancel').onclick=close;$('#dialog').addEventListener('cancel',e=>{e.preventDefault();close();});
 $('#fields').addEventListener('input',e=>{if(e.target.name==='buyer-search')renderBuyerOptions();if(e.target.id==='rights-search'){const q=e.target.value.toLocaleLowerCase();document.querySelectorAll('.assignment').forEach(r=>r.hidden=!r.dataset.search.includes(q));}});
 $('#fields').addEventListener('change',e=>{
- if(e.target.name==='account_type'&&$('#rights-list')){document.querySelectorAll('.assignment .rs').forEach(select=>{const kind=e.target.value;for(const option of select.options)option.disabled=kind==='client'?option.value==='all':kind==='payer'?option.value==='client':false;const first=[...select.options].find(o=>!o.disabled);if(first){select.value=first.value;select.closest('.assignment').querySelector('.recipient-options').hidden=first.value==='all';}});return;}
+ if(e.target.name==='account_type'&&$('#rights-list')){document.querySelectorAll('.assignment .rs').forEach(select=>{
+  const kind=e.target.value,row=select.closest('.assignment'),payer=assignmentPayers.find(p=>p.key===row.dataset.key),previous=select.value;
+  select.innerHTML=(kind!=='payer'?'<option value="client">Выбранные получатели</option>':'')+(kind!=='client'&&payer?.access==='all'?'<option value="all">Все получатели покупателя</option>':'');
+  const options=[...select.options];select.value=options.some(o=>o.value===previous)?previous:options[0]?.value||'';
+  row.querySelector('.recipient-options').hidden=select.value==='all';
+ });return;}
  if(e.target.id==='kis-buyer'){$('#editor [name=name]').value=kisBuyers.find(p=>String(p.id)===e.target.value)?.name||'';return;}
  const r=e.target.closest('.assignment');if(!r)return;
  if(e.target.classList.contains('payer-check')){r.querySelector('.recipient-area').hidden=!e.target.checked;if(e.target.checked)loadAssignmentClients(r);else r.dataset.request=Number(r.dataset.request||0)+1;}
