@@ -20,7 +20,7 @@ def main():
     if not re.fullmatch('[0-9a-f]{40}',args.revision):raise RuntimeError('Use an exact 40-character Git commit')
     if args.configure and not args.apply:raise RuntimeError('--configure requires --apply')
     stamp=datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    folder=Path.home()/('Karavay-Manager-0.9.1-'+stamp)
+    folder=Path.home()/('Karavay-Manager-0.9.2-'+stamp)
     folder.mkdir(mode=0o700)
     base='https://raw.githubusercontent.com/nikitinad17-ai/Karavay_LK/'+args.revision+'/manager-live/'
     def download(name):

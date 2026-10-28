@@ -16,7 +16,7 @@ def main():
  for name,digest in manifest['gateway'].items():
   installed=sha(root/'pb_hooks'/name)
   if name!='karavay-orders.pb.js' and installed not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Installed gateway differs: '+name+'. Re-export hooks before proceeding.')
- print('Manager metadata and users password minimum (6) are updated. Existing passwords, roles, rights and client files are preserved.')
+ print('PLAN: update manager metadata and users password minimum to 6. Preserve existing passwords, roles, rights and client files.')
  db=root/'pb_data/data.db'
  if not db.is_file():raise RuntimeError('Database not found')
  # Read definitions only. No data is read, exported or changed during preflight.
@@ -39,9 +39,13 @@ def main():
    if fields.get(name,{}).get('type')!=kind:raise RuntimeError('Schema mismatch: '+col+'.'+name)
  version=run(str(root/'pocketbase'),'--version').stdout
  if '0.40.3' not in version:raise RuntimeError('Expected PocketBase 0.40.3; found '+version.strip())
+ conflicts=[]
  for name in manifest['package']:
   dst=root/name
-  if dst.exists() and sha(dst) not in [manifest['package'][name],*manifest.get('previous',{}).get(name,[])]:raise RuntimeError('Manager file already differs: '+name+'. Review before replacing.')
+  if dst.exists():
+   installed=sha(dst)
+   if installed not in [manifest['package'][name],*manifest.get('previous',{}).get(name,[])]:conflicts.append(name+'; SHA256='+installed)
+ if conflicts:raise RuntimeError('Manager file already differs; no files replaced. Review before replacing:\n'+'\n'.join(conflicts))
  run('systemctl','is-active','pocketbase')
  managed_hooks={pathlib.Path(name).name for name in manifest['package'] if name.startswith('pb_hooks/')}
  protected=[p for p in (root/'pb_hooks').iterdir() if p.is_file() and p.name not in managed_hooks]

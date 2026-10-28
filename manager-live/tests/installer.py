@@ -9,6 +9,7 @@ import json
 import pathlib
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import types
@@ -96,6 +97,26 @@ class Preflight(unittest.TestCase):
    self.preflight()
   self.assertEqual(before,self.snapshot())
 
+ def test_reports_all_unknown_manager_files_without_writes(self):
+  names=['pb_hooks/karavay-manager.js','pb_public/manager/app.js']
+  for name in names:(self.root/name).write_text('unknown '+name)
+  before=self.snapshot()
+  with self.assertRaises(RuntimeError) as raised:self.preflight()
+  for name in names:
+   self.assertIn(name+'; SHA256='+before[name],str(raised.exception))
+  self.assertEqual(before,self.snapshot())
+
+ def test_accepts_published_092_without_writes(self):
+  revision='bff8d2ca92b9e9c5a038364dee6f207abcc58d00'
+  manifest=json.loads(subprocess.check_output(['git','show',revision+':manager-live/MANIFEST.json'],cwd=SOURCE.parent))
+  for name,digest in manifest['package'].items():
+   raw=subprocess.check_output(['git','show',revision+':manager-live/'+name],cwd=SOURCE.parent)
+   self.assertEqual(hashlib.sha256(raw).hexdigest(),digest)
+   (self.root/name).write_bytes(raw)
+  before=self.snapshot()
+  self.assertIn('PREFLIGHT: PASSED',self.preflight())
+  self.assertEqual(before,self.snapshot())
+
  def test_install_refuses_nonproduction_root_without_writes(self):
   before=self.snapshot()
   with self.assertRaisesRegex(RuntimeError,'Installation allowed only|Installation requires sudo'):
@@ -151,7 +172,7 @@ class Preflight(unittest.TestCase):
   self.assertEqual((self.root/'pb_public/index.html').read_text(),'Existing client 3.8.0')
   self.assertTrue((self.root/'pb_public/manager/theme.css').exists())
   backup=next(backups.iterdir());self.assertEqual((backup/'pb_public/manager/app.js').read_bytes(),old)
-  self.assertIn('MANAGER_RELEASE_INSTALLED: 0.9.1',output)
+  self.assertIn('MANAGER_RELEASE_INSTALLED: 0.9.2',output)
 
  def test_partial_copy_failure_restores_the_affected_file(self):
   old,target,backups,output=self.simulated_install(fail_copy=True)

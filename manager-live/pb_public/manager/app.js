@@ -164,37 +164,84 @@ function render(){
 }
 
 async function loadClients(){const g=++generation,selected=buyer;clients=[];render();if(!buyer)return;try{const data=await api('/service/manager/clients?payer='+encodeURIComponent(buyer));if(g!==generation||selected!==buyer||tab!=='clients')return;clients=data.clients;render();if(!clients.length)notify('Получатели не найдены.');}catch(e){if(g===generation)notify(e.message);}}
-function snapshot(){return JSON.stringify({fields:[...new FormData($('#editor')).entries()],rights:[...document.querySelectorAll('.assignment')].map(r=>[r.querySelector('.payer-check').checked,r.dataset.key,r.querySelector('.rs').value,[...r.querySelectorAll('.rc:checked')].map(c=>c.value)])});}
+function snapshot(){return JSON.stringify({fields:[...new FormData($('#editor')).entries()],rights:[...document.querySelectorAll('.assignment')].filter(r=>r.querySelector('.payer-check').checked).map(r=>[r.dataset.key,r.querySelector('.rs').value,r.querySelector('.rs').value==='client'?[...r.querySelectorAll('.rc:checked')].map(c=>c.value).sort():[]]).sort((a,b)=>a[0].localeCompare(b[0]))});}
 function close(){if(busy)return;if(snapshot()!==baseline&&!confirm('Закрыть форму и отменить несохранённые изменения?'))return;$('#dialog').close();}
 function openEditor(action,title,html,obj=null){editorGeneration++;formAction=action;editing=obj;$('#dialog-title').textContent=title;$('#fields').innerHTML=html;$('#form-error').textContent='';$('#save').textContent=action==='password'?'Сменить пароль':action==='create_user'?'Создать':'Сохранить';$('#save').hidden=action==='info';$('#cancel').textContent=action==='info'?'Закрыть':'Отмена';$('#dialog').showModal();baseline=snapshot();}
 function userForm(u={}){
  const kind=u.id?roleKind(u):'';
- return '<div class="user-form-grid">'+field('login','Логин *','text',u.login||'','required minlength="3" maxlength="100" autocomplete="off" placeholder="например, ivanov" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]*"')+field('email','Email *','email',u.email||'','required autocomplete="off" placeholder="user@company.ru"')+`<label>Роль *<select name="account_type" required><option value="">— выберите роль —</option><option value="admin" disabled>Администратор</option><option value="manager" disabled>Менеджер</option><option value="client" ${kind==='client'?'selected':''}>Получатель (Client)</option><option value="payer" ${kind==='payer'?'selected':''}>Покупатель (Payer)</option>${u.role_code==='viewer'?'<option value="viewer" selected>Только просмотр</option>':''}</select></label>`+(u.id?'':field('password','Пароль *','password','','required minlength="6" autocomplete="new-password" placeholder="не менее 6 символов"'))+'</div>';
+ return '<div class="user-form-grid">'+field('login','Логин *','text',u.login||'','required minlength="3" maxlength="100" autocomplete="off" placeholder="например, ivanov" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]*"')+field('email','Email *','email',u.email||'','required autocomplete="off" placeholder="user@company.ru"')+`<label>Роль *<select name="account_type" required><option value="">— выберите роль —</option><option value="client" ${kind==='client'?'selected':''}>Получатель (Client)</option><option value="payer" ${kind==='payer'?'selected':''}>Покупатель (Payer)</option>${u.role_code==='viewer'?'<option value="viewer" selected>Только просмотр</option>':''}</select></label>`+(u.id?'':field('password','Пароль *','password','','required minlength="6" autocomplete="new-password" placeholder="не менее 6 символов"'))+'</div>';
 }
 function editUser(u){
- openEditor('edit_user','Изменить пользователя',userForm(u)+`<details class="edit-access"><summary>Покупатели и получатели</summary><div id="assignment-fields"></div></details><details class="edit-settings"><summary>Настройки доступа</summary><label class="check-row"><input type="checkbox" name="active" ${u.active?'checked':''}> Активен</label><button type="button" data-reset="${u.id}">Сбросить пароль</button></details>`,u);
+ openEditor('edit_user','Изменить пользователя',userForm(u)+`<details class="edit-access"><summary>${roleKind(u)==='client'?'Получатели (торговые точки)':roleKind(u)==='payer'?'Покупатели':'Покупатели и получатели'}</summary><div id="assignment-fields"></div></details><details class="edit-settings"><summary>Настройки доступа</summary><label class="check-row"><input type="checkbox" name="active" ${u.active?'checked':''}> Активен</label><button type="button" data-reset="${u.id}">Сбросить пароль</button></details>`,u);
  $('#fields .edit-access').addEventListener('toggle',e=>{if(e.target.open&&!$('#assignment-fields').hasChildNodes())fillAssignments();});
 }
 
+function assignmentKind(){return $('#editor [name=account_type]')?.value||roleKind(editing||{rights:[]});}
 function rightRow(p,rs=[]){
- const type=$('#editor [name=account_type]')?.value,chosen=rs.length>0,all=type==='payer'||(type!=='client'&&rs.some(x=>x.scope==='all')),disabled=p.connection==='registered'||p.active===false;
- return `<article class="assignment" data-key="${esc(p.key)}" data-search="${esc((p.code+' '+p.name).toLocaleLowerCase())}"><label class="check-row"><input type="checkbox" class="payer-check" ${chosen?'checked':''} ${disabled?'disabled':''}><span><strong>${esc(p.code)} — ${esc(p.name)}</strong>${p.email?`<small>${esc(p.email)}</small>`:''}</span><small class="kis-id">${p.id_pay}</small></label>${disabled?'<small>Доступ назначает администратор</small>':''}<div class="recipient-area" ${chosen?'':'hidden'}><label>Область доступа<select class="rs">${type!=='payer'?`<option value="client" ${!all?'selected':''}>Выбранные получатели</option>`:''}${p.access==='all'&&type!=='client'?`<option value="all" ${all?'selected':''}>Все получатели покупателя</option>`:''}</select></label><div class="recipient-options" ${all?'hidden':''}>${rs.filter(x=>x.scope==='client'&&x.kis_client_id>0).map(x=>`<label class="check-row"><input type="checkbox" class="rc" value="${x.kis_client_id}" checked>КИС ID ${x.kis_client_id}</label>`).join('')}</div><p class="candidate-status" role="status"></p><button type="button" data-candidates>Обновить получателей</button></div></article>`;
+ const chosen=rs.length>0,all=rs.some(x=>x.scope==='all');
+ return `<article class="assignment" data-key="${esc(p.key)}" data-search="${esc((p.code+' '+p.name).toLocaleLowerCase())}"><label class="check-row assignment-buyer"><input type="checkbox" class="payer-check" ${chosen?'checked':''}><span><strong>${esc(p.code)} — ${esc(p.name)}</strong>${p.email?`<small>${esc(p.email)}</small>`:''}</span></label><p class="buyer-restriction" hidden>Доступ назначает администратор</p><div class="recipient-area" ${chosen?'':'hidden'}><label class="scope-field">Область доступа<select class="rs"><option value="client" ${!all?'selected':''}>Выбранные получатели</option><option value="all" ${all?'selected':''}>Все получатели покупателя</option></select></label><div class="recipient-options" ${all?'hidden':''}>${rs.filter(x=>x.scope==='client'&&x.kis_client_id>0).map(x=>`<label class="check-row"><input type="checkbox" class="rc" value="${x.kis_client_id}" checked><span>КИС ID ${x.kis_client_id}</span></label>`).join('')}</div><p class="candidate-status" role="status"></p><button type="button" data-candidates>Обновить получателей</button></div></article>`;
 }
-function rightsForm(rs=[]){return '<p class="hint">Отметьте покупателей, затем выберите получателей. Сохранение назначит доступ этому пользователю.</p><label>Поиск покупателя<input id="rights-search" type="search" autocomplete="off" placeholder="Код или название покупателя"></label><div id="rights-list" class="rights-list">'+assignmentPayers.map(p=>rightRow(p,rs.filter(x=>x.payer===p.id))).join('')+'</div>';}
+function rightsForm(rs=[]){
+ return '<p id="assignment-hint" class="hint"></p><div id="buyer-controls"><label>Поиск покупателя<input id="rights-search" type="search" autocomplete="off" placeholder="Код или название покупателя"></label></div><div id="point-controls" hidden><label>Поиск покупателя точки<input id="point-buyer-search" type="search" autocomplete="off" placeholder="Код или название покупателя"></label><label>Покупатель точки<select id="point-buyer"><option value="">— выберите покупателя —</option></select></label><label>Поиск точки<input id="point-search" type="search" autocomplete="off" placeholder="Код, название или адрес точки"></label><p id="point-count" role="status"></p><div id="selected-point-buyers" class="selected-point-buyers"></div></div><p id="point-empty" class="hint" hidden>Выберите покупателя — здесь появятся его торговые точки.</p><div id="rights-list" class="rights-list">'+assignmentPayers.map(p=>rightRow(p,rs.filter(x=>x.payer===p.id))).join('')+'</div>';
+}
+function unavailableBuyer(p){return p.connection==='registered'||p.active===false;}
+function pointBuyerOptions(){
+ const select=$('#point-buyer'),selected=select.value,q=$('#point-buyer-search').value.trim().toLocaleLowerCase();
+ select.innerHTML='<option value="">— выберите покупателя —</option>'+assignmentPayers.filter(p=>p.key===selected||(p.code+' '+p.name).toLocaleLowerCase().includes(q)).map(p=>`<option value="${esc(p.key)}" ${unavailableBuyer(p)?'disabled':''}>${esc(p.code)} — ${esc(p.name)}${unavailableBuyer(p)?' · доступ назначает администратор':''}</option>`).join('');select.value=selected;
+}
+function pointSelections(){
+ const groups=[...document.querySelectorAll('.assignment')].map(r=>({p:assignmentPayers.find(p=>p.key===r.dataset.key),count:r.querySelectorAll('.rc:checked').length})).filter(x=>x.count);
+ $('#point-count').textContent='Выбрано точек: '+groups.reduce((n,g)=>n+g.count,0);
+ $('#selected-point-buyers').innerHTML=groups.map(g=>`<button type="button" data-point-buyer="${esc(g.p.key)}">${esc(g.p.code)} · точек: ${g.count}</button>`).join('');
+}
+function filterPoints(){
+ const q=$('#point-search').value.trim().toLocaleLowerCase();
+ document.querySelectorAll('.recipient-options .check-row').forEach(label=>label.hidden=!label.textContent.toLocaleLowerCase().includes(q));
+}
+function choosePointBuyer(){
+ const key=$('#point-buyer').value;let current;
+ document.querySelectorAll('.assignment').forEach(r=>{r.hidden=r.dataset.key!==key;if(!r.hidden){current=r;r.querySelector('.recipient-area').hidden=false;}});
+ $('#point-empty').hidden=!!current;
+ if(current)loadAssignmentClients(current);filterPoints();
+}
+function assignmentMode(){
+ const kind=assignmentKind(),point=kind==='client',payer=kind==='payer',list=$('#rights-list');if(!list)return;
+ const first=[...document.querySelectorAll('.assignment')].find(r=>r.querySelector('.payer-check').checked)?.dataset.key||'',previous=list.dataset.kind;
+ list.dataset.kind=kind;$('#point-controls').hidden=!point;$('#buyer-controls').hidden=point;
+ const summary=$('.edit-access>summary');if(summary)summary.textContent=point?'Получатели (торговые точки)':payer?'Покупатели':'Покупатели и получатели';
+ $('#assignment-hint').textContent=point?'Выберите покупателя, затем отметьте конкретные точки по коду и адресу.':payer?'Отметьте покупателей. Пользователь получит доступ ко всем их действующим точкам.':'Отметьте покупателей и выберите область доступа. Режим «Только просмотр» сохраняется.';
+ document.querySelectorAll('.assignment').forEach(r=>{
+  const p=assignmentPayers.find(p=>p.key===r.dataset.key),check=r.querySelector('.payer-check'),select=r.querySelector('.rs');r.dataset.request=Number(r.dataset.request||0)+1;
+  if(previous==='payer'&&kind!=='payer')r.dataset.payerSelected=check.checked?'1':'0';
+  if(payer&&previous&&previous!=='payer'&&r.dataset.payerSelected!==undefined)check.checked=r.dataset.payerSelected==='1';
+  select.querySelector('[value=all]').disabled=point||p.access!=='all';select.querySelector('[value=client]').disabled=payer;
+  if(point){select.value='client';check.checked=r.querySelectorAll('.rc:checked').length>0;}
+  if(payer)select.value='all';
+  check.disabled=(unavailableBuyer(p)||(payer&&p.access!=='all'))&&!check.checked;
+  r.querySelector('.buyer-restriction').hidden=!check.disabled;
+  r.querySelector('.recipient-area').hidden=payer||(!point&&!check.checked);
+  r.querySelector('.recipient-options').hidden=select.value==='all';
+  r.querySelector('.scope-field').hidden=point||payer;
+  r.hidden=point?true:!r.dataset.search.includes($('#rights-search').value.toLocaleLowerCase());
+ });
+ if(point){pointBuyerOptions();if(!$('#point-buyer').value)$('#point-buyer').value=first;pointSelections();choosePointBuyer();}
+ else{$('#point-empty').hidden=true;if(!payer)document.querySelectorAll('.assignment').forEach(loadAssignmentClients);}
+}
 async function fillAssignments(){
  const gen=editorGeneration,session=token;$('#save').disabled=true;
  try{const data=await api('/service/manager/directory');if(gen!==editorGeneration||session!==token||!$('#dialog').open)return;
  assignmentPayers=data.buyers.map(k=>{const p=state.payers.find(p=>p.id_pay===k.id&&p.code===k.code);return p?{...p,key:p.id,connection:k.connection}:{key:'kis-'+k.id,id:'',id_pay:k.id,code:k.code,name:k.name,email:'',active:true,access:'all',connection:k.connection};});
  // Preserve assigned buyers absent from a temporary KIS directory response.
  for(const r of editing.rights||[]){const p=state.payers.find(p=>p.id===r.payer);if(p&&!assignmentPayers.some(x=>x.id===p.id))assignmentPayers.push({...p,key:p.id,connection:'assigned'});}
- ($('#assignment-fields')||$('#fields')).innerHTML=rightsForm([...(editing.rights||[]).filter(r=>r.active),...assignmentSeed]);{const before=JSON.parse(baseline),now=JSON.parse(snapshot());baseline=JSON.stringify({...before,rights:now.rights});}$('#save').disabled=false;
- document.querySelectorAll('.assignment').forEach(loadAssignmentClients);
+ ($('#assignment-fields')||$('#fields')).innerHTML=rightsForm([...(editing.rights||[]).filter(r=>r.active),...assignmentSeed]);assignmentMode();
+ {const before=JSON.parse(baseline),now=JSON.parse(snapshot());baseline=JSON.stringify({...before,rights:now.rights});}$('#save').disabled=false;
  }catch(e){if(gen===editorGeneration){($('#assignment-fields')||$('#fields')).innerHTML='<p role="alert">'+esc(e.message)+'</p><button type="button" id="retry-assignments">Повторить загрузку</button>';}}
 }
 async function openAssignments(u,created=false){assignmentSeed=created&&pendingUserContext?[{payer:pendingUserContext.payer,scope:pendingUserContext.client?'client':state.payers.find(p=>p.id===pendingUserContext.payer)?.access==='all'?'all':'client',kis_client_id:pendingUserContext.client||0,active:true}]:[];openEditor('set_rights',(created?'Пользователь создан · ':'')+'Покупатели и получатели', '<p role="status">Загружаем справочник КИС…</p>',u);$('#save').textContent='Сохранить доступ';await fillAssignments();}
 function readRights(){return [...document.querySelectorAll('.assignment')].filter(r=>r.querySelector('.payer-check').checked).flatMap(r=>{
  const p=assignmentPayers.find(p=>p.key===r.dataset.key),scope=r.querySelector('.rs').value,base=p.id?{payer:p.id}:{kis_payer_id:p.id_pay};
- if(!['client','all'].includes(scope))throw Error('Нет права назначить всех получателей для '+p.name+'. Выберите конкретных получателей или снимите покупателя.');
+ if(!['client','all'].includes(scope))throw Error('Выберите допустимую область доступа для '+p.name+'.');
+ if(scope==='all'&&p.access!=='all')throw Error('Доступ ко всему покупателю '+p.code+' недоступен. Выберите роль получателя и конкретные точки.');
  if(scope==='all')return [{...base,scope,kis_client_id:0}];
  const ids=[...r.querySelectorAll('.rc:checked')].map(c=>Number(c.value));if(!ids.length)throw Error('Отметьте хотя бы одного получателя для '+p.name+'.');
  return ids.map(kis_client_id=>({...base,scope,kis_client_id}));
@@ -209,16 +256,18 @@ function renderBuyerOptions(){
 }
 async function loadBuyers(preselected=''){const gen=editorGeneration;kisBuyers=[];try{const data=await api('/service/manager/buyers');if(gen!==editorGeneration||!$('#dialog').open||formAction!=='create_payer')return;kisBuyers=data.buyers;renderBuyerOptions();if(preselected){$('#kis-buyer').value=String(preselected);$('#editor [name=name]').value=kisBuyers.find(p=>String(p.id)===String(preselected))?.name||'';}}catch(e){if(gen===editorGeneration){$('#buyer-status').textContent=e.message;$('#kis-buyer').innerHTML='<option value="">Не удалось загрузить покупателей</option>';}}}
 async function loadAssignmentClients(r){
- if(!r.querySelector('.payer-check').checked)return;
+ const kind=assignmentKind();if(kind==='payer'||(kind==='client'?r.hidden:!r.querySelector('.payer-check').checked))return;
  const p=assignmentPayers.find(x=>x.key===r.dataset.key),gen=editorGeneration,seq=Number(r.dataset.request||0)+1;r.dataset.request=seq;
  const box=r.querySelector('.recipient-options'),hint=r.querySelector('.candidate-status'),b=r.querySelector('[data-candidates]');
- const selected=new Set([...r.querySelectorAll('.rc:checked')].map(c=>Number(c.value)));b.disabled=true;hint.textContent='Загружаем из КИС…';
- try{const data=await api(p.id?'/service/manager/clients?payer='+encodeURIComponent(p.id):'/service/manager/kis-clients?payer='+p.id_pay);if(gen!==editorGeneration||!r.isConnected||!r.querySelector('.payer-check').checked||Number(r.dataset.request)!==seq)return;
+ b.disabled=true;hint.textContent='Загружаем из КИС…';
+ try{const data=await api(p.id?'/service/manager/clients?payer='+encodeURIComponent(p.id):'/service/manager/kis-clients?payer='+p.id_pay);if(gen!==editorGeneration||!r.isConnected||!$('#dialog').open||assignmentKind()!==kind||Number(r.dataset.request)!==seq)return;
+ const selected=new Set([...r.querySelectorAll('.rc:checked')].map(c=>Number(c.value)));
  const missing=[...selected].filter(id=>!data.clients.some(c=>c.id===id));
- box.innerHTML=data.clients.map(c=>`<label class="check-row"><input type="checkbox" class="rc" value="${c.id}" ${selected.has(c.id)?'checked':''}><span>${esc(c.code)} · ${esc(c.name)}<small>${esc(c.address)} · ID ${c.id}</small></span></label>`).join('')+missing.map(id=>`<label class="check-row unavailable"><input type="checkbox" class="rc" value="${id}" checked><span>КИС ID ${id} · отсутствует в текущей выдаче. Снимите галочку для удаления доступа.</span></label>`).join('');
+ box.innerHTML=data.clients.map(c=>`<label class="check-row"><input type="checkbox" class="rc" value="${c.id}" ${selected.has(c.id)?'checked':''}><span>${esc(c.code)} · ${esc(c.name)}<small>${esc(c.address)}</small></span></label>`).join('')+missing.map(id=>`<label class="check-row unavailable"><input type="checkbox" class="rc" value="${id}" checked><span>КИС ID ${id} · отсутствует в текущей выдаче. Снимите галочку для удаления доступа.</span></label>`).join('');
+ if(kind==='client'){pointSelections();filterPoints();}
  hint.textContent=data.clients.length?`Загружено: ${data.clients.length}. ${r.querySelector('.rs').value==='all'?'Доступ ко всем действующим получателям.':'Отметьте нужных получателей.'}`:'Получатели не найдены в КИС.';
- }catch(e){if(gen===editorGeneration&&r.isConnected&&Number(r.dataset.request)===seq)hint.textContent=e.message;}
- finally{if(gen===editorGeneration&&r.isConnected&&Number(r.dataset.request)===seq)b.disabled=false;}
+ }catch(e){if(gen===editorGeneration&&r.isConnected&&assignmentKind()===kind&&Number(r.dataset.request)===seq)hint.textContent=e.message;}
+ finally{if(gen===editorGeneration&&r.isConnected&&assignmentKind()===kind&&Number(r.dataset.request)===seq)b.disabled=false;}
 }
 $('#login-form').addEventListener('submit',async e=>{e.preventDefault();const button=e.submitter||$('#login-form button[type=submit]'),g=++authGeneration;loginError('');button.disabled=true;try{const f=new FormData(e.target),remember=e.target.elements.remember.checked,data=await api('/api/collections/users/auth-with-password',{identity:f.get('identity'),password:f.get('password')},false);if(g!==authGeneration)return;saveSession(data.token,remember);e.target.reset();$('#retry-session').hidden=true;await enterAccount(data.record);}catch(err){if(g===authGeneration||!token)notify(err.message);}finally{button.disabled=false;}});
 $('#logout').onclick=()=>logout();$('#retry-session').onclick=restoreSession;$('#refresh').onclick=()=>load().then(()=>tab==='clients'?loadClients():null).catch(e=>notify(e.message));$('#search').oninput=render;
@@ -251,20 +300,17 @@ $('#content').addEventListener('click',e=>{const b=e.target.closest('button');if
  if(d.attach)action({action:'attach_client',payer:buyer,kis_client_id:Number(d.attach)});
 });
 $('#close').onclick=close;$('#cancel').onclick=close;$('#dialog').addEventListener('cancel',e=>{e.preventDefault();close();});
-$('#fields').addEventListener('input',e=>{if(e.target.name==='buyer-search')renderBuyerOptions();if(e.target.id==='rights-search'){const q=e.target.value.toLocaleLowerCase();document.querySelectorAll('.assignment').forEach(r=>r.hidden=!r.dataset.search.includes(q));}});
+$('#fields').addEventListener('input',e=>{if(e.target.name==='buyer-search')renderBuyerOptions();if(e.target.id==='point-buyer-search')pointBuyerOptions();if(e.target.id==='point-search')filterPoints();if(e.target.id==='rights-search'){const q=e.target.value.toLocaleLowerCase();document.querySelectorAll('.assignment').forEach(r=>r.hidden=!r.dataset.search.includes(q));}});
 $('#fields').addEventListener('change',e=>{
- if(e.target.name==='account_type'&&$('#rights-list')){document.querySelectorAll('.assignment .rs').forEach(select=>{
-  const kind=e.target.value,row=select.closest('.assignment'),payer=assignmentPayers.find(p=>p.key===row.dataset.key),previous=select.value;
-  select.innerHTML=(kind!=='payer'?'<option value="client">Выбранные получатели</option>':'')+(kind!=='client'&&payer?.access==='all'?'<option value="all">Все получатели покупателя</option>':'');
-  const options=[...select.options];select.value=options.some(o=>o.value===previous)?previous:options[0]?.value||'';
-  row.querySelector('.recipient-options').hidden=select.value==='all';
- });return;}
+ if(e.target.name==='account_type'){const summary=$('.edit-access>summary');if(summary)summary.textContent=e.target.value==='client'?'Получатели (торговые точки)':e.target.value==='payer'?'Покупатели':'Покупатели и получатели';if($('#rights-list'))assignmentMode();return;}
+ if(e.target.id==='point-buyer'){choosePointBuyer();return;}
  if(e.target.id==='kis-buyer'){$('#editor [name=name]').value=kisBuyers.find(p=>String(p.id)===e.target.value)?.name||'';return;}
  const r=e.target.closest('.assignment');if(!r)return;
  if(e.target.classList.contains('payer-check')){r.querySelector('.recipient-area').hidden=!e.target.checked;if(e.target.checked)loadAssignmentClients(r);else r.dataset.request=Number(r.dataset.request||0)+1;}
+ if(e.target.classList.contains('rc')&&assignmentKind()==='client'){r.querySelector('.payer-check').checked=r.querySelectorAll('.rc:checked').length>0;pointSelections();}
  if(e.target.classList.contains('rs'))r.querySelector('.recipient-options').hidden=e.target.value==='all';
 });
-$('#fields').addEventListener('click',e=>{const b=e.target.closest('button');if(b?.dataset.reset){const u=editing;if(confirm('Отправить ссылку восстановления на '+u.email+'?'))action({action:'reset_password',user:u.id});return;}if(b?.id==='retry-assignments'){fillAssignments();return;}if(b&&'candidates'in b.dataset)loadAssignmentClients(b.closest('.assignment'));});
+$('#fields').addEventListener('click',e=>{const b=e.target.closest('button');if(b?.dataset.pointBuyer){$('#point-buyer-search').value='';pointBuyerOptions();$('#point-buyer').value=b.dataset.pointBuyer;choosePointBuyer();return;}if(b?.dataset.reset){const u=editing;if(confirm('Отправить ссылку восстановления на '+u.email+'?'))action({action:'reset_password',user:u.id});return;}if(b?.id==='retry-assignments'){fillAssignments();return;}if(b&&'candidates'in b.dataset)loadAssignmentClients(b.closest('.assignment'));});
 $('#editor').addEventListener('submit',async e=>{e.preventDefault();if(busy||formAction==='info')return;busy=true;$('#save').disabled=true;$('#form-error').textContent='';try{const data=Object.fromEntries(new FormData(e.target));if(formAction==='password'){await api('/service/account/change-password',data);logout();notify('Пароль изменён. Войдите заново. Для кабинета клиента откройте основной адрес.');return;}
  if(formAction==='create_payer'){const selected=kisBuyers.find(p=>String(p.id)===$('#kis-buyer').value);if(!selected)throw Error('Выберите покупателя из КИС.');data.id_pay=selected.id;data.code=selected.code;data.name=selected.name;delete data['buyer-search'];}
  if(['create_user','edit_user'].includes(formAction)){

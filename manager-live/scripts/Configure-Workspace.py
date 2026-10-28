@@ -87,7 +87,7 @@ def check_private_entry(api):
     with api.opener.open(request,timeout=20) as response:html=response.read(4*1024*1024)
     expected=(ROOT/'pb_public/manager/index.html').read_bytes()
     if hashlib.sha256(html).digest()!=hashlib.sha256(expected).digest():
-        raise Failure('На сервере другой HTML менеджера. Сначала установите весь выпуск 0.9.1.')
+        raise Failure('На сервере другой HTML менеджера. Сначала установите весь выпуск 0.9.2.')
     request=urllib.request.Request(quick.seed.PB+'/service/manager/state',method='OPTIONS',headers={'Origin':'null','Access-Control-Request-Method':'GET','Access-Control-Request-Headers':'authorization'})
     with api.opener.open(request,timeout=20) as response:
         if response.headers.get('Access-Control-Allow-Origin') not in ('*','null'):
@@ -117,13 +117,13 @@ def configure(api,apply=False,manager_name='Менеджер Каравай',man
             state=private.call('/service/manager/state')
         finally:
             private.token=''
-        if state.get('version')!='0.9.1' or state.get('manager',{}).get('id')!=manager['id']:
-            raise Failure('Менеджер 0.9.1 на сервере не подтверждён. Старые файлы и пароли не изменены.')
+        if state.get('version')!='0.9.2' or state.get('manager',{}).get('id')!=manager['id']:
+            raise Failure('Менеджер 0.9.2 на сервере не подтверждён. Старые файлы и пароли не изменены.')
         page,expires=private_manager_html(manager,auth,public_url)
         manager_file=output/'Karavay-Manager-Access.html'
         quick.private_save(manager_file,page)
         auth=None;page=None
-        report={'version':'0.9.1','run_id':run_id,'manager':{'id':manager['id'],'name':manager['name'],'email':manager['email']},'manager_access':'ready','expires':expires,'demo':'pending','buyers':list(payer_ids),'single_client':client_id,'time':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+        report={'version':'0.9.2','run_id':run_id,'manager':{'id':manager['id'],'name':manager['name'],'email':manager['email']},'manager_access':'ready','expires':expires,'demo':'pending','buyers':list(payer_ids),'single_client':client_id,'time':datetime.datetime.now(datetime.timezone.utc).isoformat()}
         report_path=output/'Karavay-Manager-Setup-Report.json'
         quick.private_save(report_path,json.dumps(report,ensure_ascii=False,indent=2)+'\n')
         print('MANAGER_ACCESS_READY:',manager_file)
@@ -144,7 +144,7 @@ def configure(api,apply=False,manager_name='Менеджер Каравай',man
             quick.manager=original_manager
         report['demo']='ready'
         quick.private_save(report_path,json.dumps(report,ensure_ascii=False,indent=2)+'\n')
-        print('MANAGER_WORKSPACE_READY: 0.9.1')
+        print('MANAGER_WORKSPACE_READY: 0.9.2')
         print('DEMO_USERS_READY: 3; реальные КИС-покупатели',*payer_ids)
         return report
     finally:
