@@ -42,7 +42,9 @@ def usable(product):
     # Null minimum = full trays. Zero is an explicit piece minimum.
     return positive(packing) if minimum is None else type(minimum) is int and minimum >= 0
 
-def select(api, saved=None, seconds=900, emit=print):
+def select(api, saved=None, seconds=900, emit=print, target_count=2, exclude_ids=(), allowed=lambda p,c: True):
+    if target_count not in (2, 3):
+        raise RuntimeError('Unsupported customer scenario count')
     deadline = time.monotonic() + seconds
     day = (datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=3))).date() + datetime.timedelta(days=1)).isoformat()
     stamp = int(datetime.datetime.fromisoformat(day + 'T00:00:00+03:00').timestamp())
@@ -52,7 +54,7 @@ def select(api, saved=None, seconds=900, emit=print):
     def verify(pid, wanted=None):
         check_time()
         payer = api.call('/payers/' + str(pid), kis=True)
-        if not valid(payer) or payer['id'] != pid:
+        if not valid(payer) or payer['id'] != pid or not allowed(payer, None):
             return None
         directory = rows(api, '/payers/' + str(pid) + '/clients', 2000)
         if wanted is not None and not set(wanted) <= {r['id'] for r in directory}:
@@ -63,7 +65,7 @@ def select(api, saved=None, seconds=900, emit=print):
             if excluded(row) or wanted is not None and row['id'] not in wanted:
                 continue
             point = api.call('/clients/' + str(row['id']), kis=True)
-            if not valid(point, pid) or point['id'] != row['id']:
+            if not valid(point, pid) or point['id'] != row['id'] or not allowed(payer, point['id']):
                 continue
             points.append({'point': point, 'group': 1})
             if len(points) == (len(wanted) if wanted is not None else 2):
@@ -74,7 +76,7 @@ def select(api, saved=None, seconds=900, emit=print):
                 'stamp': stamp, 'group': points[0]['group']} if points else None
     proofs = saved.get('buyers', {}).get('proofs') if isinstance(saved, dict) else None
     if proofs is not None:
-        if (saved['buyers'].get('version') != 1 or not isinstance(proofs, list) or len(proofs) != 2
+        if (saved['buyers'].get('version') != 1 or not isinstance(proofs, list) or len(proofs) != target_count
                 or any(not isinstance(p, dict) or not positive(p.get('payer_kid'))
                        or p['payer_kid'] in EXCLUDED_IDS or not isinstance(p.get('clients'), list)
                        or not 1 <= len(p['clients']) <= 2 or any(not positive(c) for c in p['clients'])
@@ -82,12 +84,12 @@ def select(api, saved=None, seconds=900, emit=print):
                 or len(proofs[0]['clients']) != 2):
             raise RuntimeError('Invalid saved buyer scenarios')
         chosen = [verify(p['payer_kid'], p['clients']) for p in proofs]
-        if (not all(chosen) or chosen[0]['payer']['id'] == chosen[1]['payer']['id']
+        if (not all(chosen) or len({c['payer']['id'] for c in chosen if c}) != target_count
                 or len(chosen[0]['points']) < 2):
             raise RuntimeError('Saved buyer scenarios no longer usable')
         return chosen
     directory = rows(api, '/payers')
-    candidates = sorted((p for p in directory if not excluded(p) and p.get('state') in (None, 1)), key=lambda r: r['id'], reverse=True)
+    candidates = sorted((p for p in directory if not excluded(p) and p['id'] not in exclude_ids and p.get('state') in (None, 1)), key=lambda r: r['id'], reverse=True)
     emit('BUYER_DIRECTORY: ' + str(len(directory)) + ' | known manufacturers and rejected demos excluded')
     chosen, errors, repeats = [], 0, {}
     for index, row in enumerate(candidates):
@@ -99,8 +101,8 @@ def select(api, saved=None, seconds=900, emit=print):
                 chosen.append(candidate)
                 emit('BUYER_VERIFIED: ' + candidate['payer']['name'] + ' | KIS ' + str(row['id']) + ' | active recipients ' + str(len(candidate['points'])))
                 first = next((c for c in chosen if len(c['points']) >= 2), None)
-                if first and len(chosen) >= 2:
-                    return [first, next(c for c in chosen if c['payer']['id'] != first['payer']['id'])]
+                if first and len(chosen) >= target_count:
+                    return [first, *[c for c in chosen if c['payer']['id'] != first['payer']['id']][:target_count-1]]
         except Exception as error:
             errors += 1
             if errors <= 3:
@@ -109,7 +111,7 @@ def select(api, saved=None, seconds=900, emit=print):
             repeats[signature] = repeats.get(signature, 0) + 1
             if repeats[signature] >= 3:
                 break
-    raise RuntimeError('BUYER_SCENARIOS_NOT_FOUND: need two buyers and at least two active recipients of the first; read errors=' + str(errors) + '. No users/configuration changed.')
+    raise RuntimeError('BUYER_SCENARIOS_NOT_FOUND: need buyer scenarios including one with at least TWO active recipients; read errors=' + str(errors) + '. No users/configuration changed.')
 
 def probe_catalogs(api, chosen, emit=print):
     """Diagnostic only. A catalog failure never changes the selected identities.

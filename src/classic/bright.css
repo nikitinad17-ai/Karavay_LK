@@ -1,0 +1,442 @@
+/*!
+Copyright 2011 Canonical Ltd.
+Licensed under the Ubuntu Font Licence 1.0.
+
+-------------------------------
+UBUNTU FONT LICENCE Version 1.0
+-------------------------------
+
+PREAMBLE
+This licence allows the licensed fonts to be used, studied, modified and
+redistributed freely. The fonts, including any derivative works, can be
+bundled, embedded, and redistributed provided the terms of this licence
+are met. The fonts and derivatives, however, cannot be released under
+any other licence. The requirement for fonts to remain under this
+licence does not require any document created using the fonts or their
+derivatives to be published under this licence, as long as the primary
+purpose of the document is not to be a vehicle for the distribution of
+the fonts.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this licence and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Original Version" refers to the collection of Font Software components
+as received under this licence.
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to
+a new environment.
+
+"Copyright Holder(s)" refers to all individuals and companies who have a
+copyright ownership of the Font Software.
+
+"Substantially Changed" refers to Modified Versions which can be easily
+identified as dissimilar to the Font Software by users of the Font
+Software comparing the Original Version with the Modified Version.
+
+To "Propagate" a work means to do anything with it that, without
+permission, would make you directly or secondarily liable for
+infringement under applicable copyright law, except executing it on a
+computer or modifying a private copy. Propagation includes copying,
+distribution (with or without modification and with or without charging
+a redistribution fee), making available to the public, and in some
+countries other activities as well.
+
+PERMISSION & CONDITIONS
+This licence does not grant any rights under trademark law and all such
+rights are reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of the Font Software, to propagate the Font Software, subject to
+the below conditions:
+
+1) Each copy of the Font Software must contain the above copyright
+notice and this licence. These can be included either as stand-alone
+text files, human-readable headers or in the appropriate machine-
+readable metadata fields within text or binary files as long as those
+fields can be easily viewed by the user.
+
+2) The font name complies with the following:
+(a) The Original Version must retain its name, unmodified.
+(b) Modified Versions which are Substantially Changed must be renamed to
+avoid use of the name of the Original Version or similar names entirely.
+(c) Modified Versions which are not Substantially Changed must be
+renamed to both (i) retain the name of the Original Version and (ii) add
+additional naming elements to distinguish the Modified Version from the
+Original Version. The name of such Modified Versions must be the name of
+the Original Version, with "derivative X" where X represents the name of
+the new work, appended to that name.
+
+3) The name(s) of the Copyright Holder(s) and any contributor to the
+Font Software shall not be used to promote, endorse or advertise any
+Modified Version, except (i) as required by this licence, (ii) to
+acknowledge the contribution(s) of the Copyright Holder(s) or (iii) with
+their explicit written permission.
+
+4) The Font Software, modified or unmodified, in part or in whole, must
+be distributed entirely under this licence, and must not be distributed
+under any other licence. The requirement for fonts to remain under this
+licence does not affect any document created using the Font Software,
+except any version of the Font Software extracted from a document
+created using the Font Software may only be distributed under this
+licence.
+
+TERMINATION
+This licence becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM OTHER
+DEALINGS IN THE FONT SOFTWARE.
+
+*/
+/* Visual theme only. Selectors keep the existing 3.8.5 markup and actions. */
+@font-face {
+  font-family: 'Ubuntu';
+  src: url('./fonts/Ubuntu-R.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Ubuntu';
+  src: url('./fonts/Ubuntu-M.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 500 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Ubuntu';
+  src: url('./fonts/Ubuntu-B.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 700 900;
+  font-display: swap;
+}
+
+:root {
+  --blue: #043f88;
+  --blue-deep: #06336d;
+  --blue-ink: #061f40;
+  --blue-soft: #eaf3ff;
+  --blue-line: #d0ddf3;
+  --yellow: #ffdf00;
+  --yellow-soft: #fff7c4;
+  --gray-50: #f6f7fb;
+  --gray-100: #edf1f8;
+  --gray-200: #d7e0ef;
+  --gray-400: #8a9bb4;
+  --gray-600: #4d6281;
+  --ink: #10243e;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --shadow-sm: 0 1px 2px #0a2f6510;
+  --shadow-md: 0 5px 20px #0a2f6512;
+  --shadow-lg: 0 20px 60px #041f4a30;
+}
+
+body,
+button,
+input,
+select,
+textarea,
+h1,
+h2,
+h3,
+h4,
+.sidebar__logo-title,
+.login__title,
+.login__slogan {
+  font-family: 'Ubuntu', 'Segoe UI', sans-serif;
+}
+body {
+  background: var(--gray-50);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+button,
+input,
+select,
+textarea { font-size: 14px; }
+h1,
+h2,
+h3,
+h4 { color: var(--blue-ink); font-weight: 700; }
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #3384e766;
+  outline-offset: 3px;
+}
+
+.classic-shell .sidebar {
+  width: 262px;
+  background: var(--blue);
+  color: #fff;
+  box-shadow: none;
+  padding: 0;
+}
+.classic-shell { grid-template-columns: 262px minmax(0, 1fr); }
+.classic-shell .main { margin-left: 0; min-width: 0; }
+.classic-shell .sidebar__logo {
+  height: 100px;
+  min-height: 100px;
+  gap: 14px;
+  padding: 24px 22px;
+  border-bottom: 1px solid #ffffff1c;
+  margin-bottom: 0;
+}
+.classic-shell .sidebar__logo-img { width: 48px; height: 48px; object-fit: contain; }
+.classic-shell .sidebar__logo-title { font-size: 20px; color: #fff; letter-spacing: .2px; }
+.classic-shell .sidebar__logo-sub { color: #bed2ec; font-size: 11px; letter-spacing: .7px; }
+.classic-shell .sidebar__nav { padding: 18px 12px; }
+.classic-shell .sidebar__nav a {
+  min-height: 46px;
+  padding: 12px 15px;
+  gap: 12px;
+  color: #deebff;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.classic-shell .sidebar__nav a:hover { color: #fff; background: #ffffff14; }
+.classic-shell .sidebar__nav a.active {
+  color: #062447;
+  background: var(--yellow);
+  box-shadow: 0 4px 14px #001e481f;
+}
+.classic-shell .sidebar__nav a.active .badge { color: var(--yellow); background: var(--blue); }
+.classic-shell .sidebar__foot { padding: 20px 22px; border-top: 1px solid #ffffff1c; }
+.classic-shell .sidebar__foot strong { color: #fff; font-size: 14px; }
+.classic-shell .sidebar__foot p,
+.classic-shell .sidebar__foot .classic-footer { color: #b9cfe9; }
+.classic-shell .sidebar__foot button {
+  border: 1px solid #ffffff40;
+  border-radius: 9px;
+  color: #fff;
+  background: transparent;
+  min-height: 38px;
+}
+.classic-shell .sidebar__foot button:hover { background: #ffffff14; }
+.classic-shell .topbar {
+  min-height: 78px;
+  padding: 12px 32px;
+  background: #fff;
+  border-bottom: 1px solid var(--blue-line);
+  box-shadow: none;
+}
+.classic-shell .topbar__title { font-size: 23px; color: var(--blue-ink); letter-spacing: -.25px; }
+.classic-shell .topbar__user { border-radius: 14px; padding: 9px 13px; background: #edf2f9; }
+.classic-shell .avatar { color: var(--yellow); background: var(--blue); font-weight: 700; }
+.classic-shell .topbar__user-name { font-size: 14px; font-weight: 500; }
+.classic-shell .topbar__user-code { font-size: 12px; color: var(--gray-600); }
+.classic-shell .content { padding: 28px 32px 36px; }
+
+.classic-shell .card {
+  padding: 24px;
+  border: 1px solid var(--blue-line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-sm);
+  background: #fff;
+}
+.classic-shell .card__title,
+.classic-shell .card > h3,
+.classic-shell .card > .classic-actions > h3 {
+  font-size: 16px;
+  color: var(--blue-ink);
+  font-weight: 700;
+}
+.classic-actions { align-items: center; }
+.classic-shell .card > .classic-actions > h3 { margin: 0; }
+.classic-shell .banner {
+  border-radius: 12px;
+  padding: 15px 18px;
+  font-size: 14px;
+}
+.classic-shell .banner--info {
+  color: #064c9f;
+  background: #e3f2ff;
+  border: 1px solid #b5ddff;
+}
+.classic-context {
+  padding: 17px 22px;
+  margin-bottom: 20px;
+  gap: 20px;
+  border: 1px solid var(--blue-line);
+  border-left: 4px solid var(--blue);
+  border-radius: 14px;
+  background: #fff;
+}
+.classic-context label { font-size: 12px; font-weight: 500; color: var(--gray-600); }
+.classic-context select { margin-top: 6px; }
+.classic-context select,
+.classic-setup input,
+.classic-setup select,
+.classic-search {
+  min-height: 43px;
+  border: 1px solid #ccd9ee;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--blue-ink);
+  font-family: 'Ubuntu', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+}
+.classic-search { padding: 12px 14px; }
+.classic-search::placeholder { color: #7b8da6; }
+.classic-shell .setup-card { max-width: 760px; padding: 25px 28px; }
+.classic-shell .setup-card .card__title { margin-bottom: 22px; text-transform: uppercase; }
+.classic-shell .setup-card .classic-setup { display: grid; grid-template-columns: 1fr; gap: 20px; }
+.classic-shell .setup-card .classic-setup label { gap: 9px; font-weight: 500; font-size: 14px; }
+.classic-shell .setup-card .classic-setup input,
+.classic-shell .setup-card .classic-setup select { width: 100%; max-width: 470px; }
+.classic-shell .setup-card .classic-setup > .btn { justify-self: end; margin-top: 5px; }
+
+.btn {
+  min-height: 43px;
+  border-radius: 11px;
+  font-family: 'Ubuntu', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.btn--primary {
+  color: #062447;
+  background: var(--yellow);
+  border: 1px solid var(--yellow);
+  box-shadow: 0 2px 2px #a18a0010;
+}
+.btn--primary:hover:not(:disabled) { color: #062447; background: #ffe838; border-color: #ffe838; }
+.btn--secondary { color: var(--blue); background: #fff; border: 1px solid #c1d3ee; }
+.btn--secondary:hover:not(:disabled) { color: var(--blue); background: var(--blue-soft); border-color: #87b2e5; }
+.btn--sm { min-height: 36px; padding: 8px 13px; font-size: 13px; }
+.btn:disabled { box-shadow: none; opacity: .5; }
+
+.classic-shell .content > .card:has(> h2) {
+  position: relative;
+  overflow: hidden;
+  padding: 27px 28px;
+  border: 1px solid #073971;
+  color: #e8f3ff;
+  background: radial-gradient(circle at 95% 35%, #a29d4550 0, transparent 20%), linear-gradient(115deg, #07498e, #062c5c);
+  box-shadow: none;
+}
+.classic-shell .content > .card:has(> h2) h2 { margin: 0 0 8px; font-size: 26px; line-height: 1.3; color: #fff; }
+.classic-shell .content > .card:has(> h2) p { color: #dceaff; }
+.classic-shell .content > .card:has(> h2) .classic-actions { margin-top: 22px; }
+.classic-shell .content > .card:has(> h2) .btn--secondary { color: #fff; background: #ffffff05; border-color: #adc9eb80; }
+.classic-shell .content > .card:has(> h2) .btn--secondary:hover:not(:disabled) { background: #ffffff14; }
+.classic-cards { gap: 20px; margin-top: 20px; }
+.classic-shell .classic-cards > .card { min-height: 130px; padding: 21px 22px; margin: 0; }
+.classic-shell .classic-cards > .card h3 { margin: 0 0 6px; font-size: 12px; font-weight: 400; text-transform: uppercase; letter-spacing: .3px; color: var(--gray-600); }
+.classic-shell .classic-cards > .card > strong { display: block; font-size: 32px; line-height: 1.25; font-weight: 700; color: var(--blue-ink); }
+.classic-shell .classic-cards > .card p { margin: 5px 0 0; font-size: 13px; }
+.classic-shell .classic-cards > .card:first-child { background: #084d9e; border-color: #084d9e; }
+.classic-shell .classic-cards > .card:first-child h3,
+.classic-shell .classic-cards > .card:first-child p { color: #e5efff; }
+.classic-shell .classic-cards > .card:first-child > strong { color: #fff; }
+
+.classic-shell .table th {
+  padding: 14px 15px;
+  background: #eef4fd;
+  border-bottom: 1px solid #c9daf2;
+  color: #365b89;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .2px;
+}
+.classic-shell .table td { padding: 15px; border-bottom: 1px solid #e6edf8; font-size: 14px; }
+.classic-shell .table .classic-link { color: #0056b4; font-weight: 500; }
+.classic-order-row:hover td { background: #f1f7ff; }
+.classic-shell .product-list-header { background: #eef4fd; color: #4c6589; border-radius: 10px 10px 0 0; }
+.classic-shell .product { padding-top: 16px; padding-bottom: 16px; }
+.classic-shell .product__name { color: var(--blue-ink); font-size: 15px; font-weight: 500; }
+.classic-shell .price { font-size: 17px; color: var(--blue); font-weight: 700; }
+.classic-shell .qty__btn { color: var(--blue); background: #eef4fd; }
+.classic-shell .qty__btn:hover:not(:disabled) { background: var(--yellow-soft); }
+.classic-shell .summary__total strong { color: var(--blue); }
+.classic-shell .order-form { margin-top: 20px; }
+.classic-link { font-weight: 500; }
+.classic-note { color: var(--gray-600); line-height: 1.55; }
+
+.review-back { background: #001b436e; backdrop-filter: blur(3px); }
+.review-panel { border: 1px solid #d9e4f6; border-radius: 18px; box-shadow: 0 25px 90px #011c5240; }
+.review-panel__header { background: #f8faff; border-bottom-color: var(--blue-line); }
+.review-panel__header h2 { font-size: 21px; }
+.review-panel__footer { background: #f7f9fd; }
+.review-total strong { color: var(--blue); }
+
+.login { background: var(--blue); }
+.login__hero { background: radial-gradient(circle at 20% 15%, #2670b966, transparent 46%), linear-gradient(150deg, #06498f, #052e64); }
+.login__slogan { color: #fff; line-height: 1.12; letter-spacing: .1px; }
+.login__title { font-size: 29px; color: var(--blue-ink); }
+.login__submit { color: #062447; background: var(--yellow); font-weight: 500; }
+.login__submit:hover { background: #ffe838; }
+.login__field input { border-radius: 10px; }
+.classic-test-account { padding: 17px 18px; border-color: #cbdaf0; border-left: 4px solid var(--blue); border-radius: 13px; }
+.classic-test-account:nth-child(2) { border-left-color: #e7bb00; }
+.classic-test-account:nth-child(3) { border-left-color: #2a79c9; }
+.classic-test-account strong { font-size: 15px; font-weight: 500; color: var(--blue); }
+.classic-test-account span { color: #455e80; font-size: 13px; }
+.classic-test-account:hover,
+.classic-test-account:focus-visible { background: #f2f7ff; border-color: #8eb7e9; }
+
+@media (min-width: 1600px) {
+  .classic-shell .content { max-width: 1500px; margin: 0 auto; }
+}
+@media (max-width: 1100px) and (min-width: 901px) {
+  .classic-shell .content { padding: 24px; }
+  .classic-shell .topbar { padding-left: 24px; padding-right: 24px; }
+}
+@media (min-width: 901px) {
+  .classic-shell .order-form { grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
+}
+@media (max-width: 1450px) and (min-width: 901px) {
+  .classic-shell .order-form { grid-template-columns: minmax(0, 1fr); }
+  .classic-shell .summary-col { position: static; }
+}
+@media (max-width: 900px) {
+  .classic-shell { grid-template-columns: minmax(0, 1fr); }
+  .classic-shell .sidebar { width: 260px; }
+  .classic-shell .main { margin-left: 0; }
+  .classic-shell .topbar { min-height: 68px; padding: 12px 18px; }
+  .classic-shell .topbar__title { display: block; font-size: 20px; line-height: 1.25; }
+  .classic-shell .content { padding: 20px 16px 110px; }
+  .classic-context { padding: 15px 16px; gap: 14px; }
+  .classic-context label { min-width: min(220px, 100%); }
+  .classic-shell .card { padding: 20px; border-radius: 15px; }
+  .classic-shell .setup-card { padding: 22px 20px; }
+  .classic-shell .content > .card:has(> h2) { padding: 24px 21px; }
+  .classic-shell .content > .card:has(> h2) h2 { font-size: 23px; }
+  .classic-cards { gap: 14px; }
+  .classic-shell .classic-cards > .card { min-height: 115px; }
+  .classic-shell .table { min-width: 680px; }
+  .classic-mobile-review { border-top: 1px solid var(--blue-line); background: #fff; }
+  .review-panel { border-radius: 15px; }
+  .login__form-side { padding: 30px 22px; }
+}
+@media (max-width: 480px) {
+  .classic-shell .topbar__user { padding: 7px 9px; gap: 8px; }
+  .classic-shell .topbar__user-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .classic-context { flex-direction: column; align-items: stretch; }
+  .classic-context label { flex: auto; min-width: 0; }
+  .classic-shell .content > .card:has(> h2) .classic-actions > .btn { flex: 1 1 150px; }
+  .classic-shell .setup-card .classic-setup > .btn { justify-self: stretch; width: 100%; }
+  .classic-cards { grid-template-columns: 1fr; }
+  .review-panel__header h2 { font-size: 19px; }
+}

@@ -1,5 +1,5 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import App from '../src/classic/App';
 import * as api from '../src/classic/api';
 const p1='aaaaaaaaaaaaaaa',p2='bbbbbbbbbbbbbbb';
@@ -33,7 +33,7 @@ describe('Classic service mode',()=>{
   }));
   render(<App/>);fireEvent.click(await screen.findByRole('button',{name:/Один получатель/}));
   await screen.findByText('Добро пожаловать, Покупатель (демо)');expect(screen.queryByLabelText('Пароль')).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('Покупатель'),{target:{value:p1}});await waitFor(()=>expect(screen.getByLabelText('Получатель')).toHaveValue('11'));
+  await waitFor(()=>expect(screen.getByLabelText('Покупатель')).toHaveValue(p1));await waitFor(()=>expect(screen.getByLabelText('Получатель')).toHaveValue('11'));
   expect(api.getSession()?.preferredDate).toBe('2026-10-18');
   const body:api.OrderDraft={payer:p1,client:11,DateOrd:api.timestamp('2026-10-16'),Group:1,products:[{id:66,quantity:8,price:34.9}]};
   const pending=api.savePending(body);cleanup();sessionStorage.clear();
@@ -42,6 +42,42 @@ describe('Classic service mode',()=>{
   expect(vi.mocked(fetch).mock.calls.some(([path])=>String(path).endsWith('/auth-with-password'))).toBe(false);
  });
  it('uses midnight Saint Petersburg independently of host timezone and rejects invalid dates',()=>{expect(api.timestamp('2026-10-14')).toBe(Date.parse('2026-10-13T21:00:00Z')/1000);expect(()=>api.timestamp('2026-02-30')).toThrow();});
+ it('shows both real scoped recipients in the multiple-recipient demo, switches their histories, and restores the login',async()=>{
+  const account={id:'test385buyer001',name:'Несколько получателей (от 2)',email:'demo.test.buyer.v385@example.test',description:'Точки C21 и C22',preferredPayer:p2,preferredClient:22,preferredDate:api.tomorrow(),preferredGroup:1};
+  vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
+   const path=String(input);
+   if(path==='/service/test-access'&&init?.method!=='POST')return response({environment:'test-kis',accounts:[account]});
+   if(path==='/service/test-access'||path.endsWith('/auth-refresh'))return response({token:'many-points-session',record:{...account,active:true,must_change_password:false}});
+   if(path==='/service/context')return response({user:{name:'Покупатель с двумя точками',role:'owner'},payers:[{id:p2,name:'Другой покупатель',access:'all'}]});
+   if(path.startsWith('/service/clients'))return response({payer:p2,clients:[{id:21,code:'C21',name:'Первый получатель',address:''},{id:22,code:'C22',name:'Второй получатель',address:''}],count:2,hasMore:false,nextCursor:null});
+   if(path.startsWith('/service/orders?')){const cid=Number(new URL(path,'http://localhost').searchParams.get('client'));return response({payer:p2,client:cid,count:1,orders:[{id:cid+900,order_number:cid+900}],hasMore:false,nextOffset:null});}
+   return mockFetch(input,init);
+  }));
+  render(<App/>);fireEvent.click(await screen.findByRole('button',{name:/Несколько получателей/}));
+  await waitFor(()=>expect(screen.getByLabelText('Получатель')).toHaveValue('22'));
+  const select=screen.getByLabelText('Получатель');expect(within(select).getByRole('option',{name:'C21 · Первый получатель'})).toBeInTheDocument();expect(within(select).getByRole('option',{name:'C22 · Второй получатель'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('link',{name:'История заказов'}));await screen.findByRole('button',{name:'№922'});
+  fireEvent.change(select,{target:{value:'21'}});await screen.findByRole('button',{name:'№921'});expect(screen.queryByRole('button',{name:'№922'})).not.toBeInTheDocument();
+  cleanup();sessionStorage.clear();render(<App/>);await waitFor(()=>expect(screen.getByLabelText('Получатель')).toHaveValue('22'));expect(within(screen.getByLabelText('Получатель')).getAllByRole('option')).toHaveLength(3);
+ });
+ it('opens the distinct test buyer and its history, restores it, and preserves a later manual buyer choice',async()=>{
+  const account={id:'test384multi001',name:'Другие покупатели',email:'demo.test.multi.v384@example.test',description:'Второй покупатель и первый',preferredPayer:p2,preferredClient:21,preferredDate:'2026-10-28',preferredGroup:1};
+  vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
+   const path=String(input);
+   if(path==='/service/test-access'&&init?.method!=='POST')return response({environment:'test-kis',accounts:[account]});
+   if(path==='/service/test-access'||path.endsWith('/auth-refresh'))return response({token:'multi-session',record:{...account,active:true,must_change_password:false}});
+   if(path.startsWith('/service/orders?')&&path.includes(p2))return response({payer:p2,client:21,count:1,orders:[{id:27,order_number:927,client_id:21}],hasMore:false,nextOffset:null});
+   return mockFetch(input,init);
+  }));
+  render(<App/>);fireEvent.click(await screen.findByRole('button',{name:/Другие покупатели/}));
+  await waitFor(()=>expect(screen.getByLabelText('Покупатель')).toHaveValue(p2));await waitFor(()=>expect(screen.getByLabelText('Получатель')).toHaveValue('21'));
+  fireEvent.click(screen.getByRole('link',{name:'История заказов'}));await screen.findByRole('button',{name:'№927'});
+  cleanup();sessionStorage.clear();render(<App/>);await waitFor(()=>expect(screen.getByLabelText('Покупатель')).toHaveValue(p2));
+  fireEvent.change(screen.getByLabelText('Покупатель'),{target:{value:p1}});await waitFor(()=>expect(screen.getByLabelText('Получатель')).toHaveValue('11'));
+  const contexts=requests.filter(p=>p==='/service/context').length;
+  vi.spyOn(Date,'now').mockReturnValue(Date.now()+31000);fireEvent(document,new Event('visibilitychange'));
+  await waitFor(()=>expect(requests.filter(p=>p==='/service/context').length).toBeGreaterThan(contexts));expect(screen.getByLabelText('Покупатель')).toHaveValue(p1);
+ });
  it('keeps price absence distinct from zero and validates the KIS minimum',()=>{const p={id:1,cenaotp:12,kolshtordmin:4} as api.Product;expect(api.quantityError(p,3)).toContain('4');expect(api.quantityError(p,4)).toBe('');expect(api.quantityError({...p,cenaotp:null},4)).toContain('цена');});
  it('treats an empty KIS minimum as whole trays, distinct from an explicit minimum or zero',()=>{
   const p={id:1,cenaotp:12,kol_sht:8,kolshtordmin:null} as api.Product;
@@ -61,6 +97,64 @@ describe('Classic service mode',()=>{
  });
  it('loads real gateway data, converts a tray to pieces, preserves edits on cancelling scope change',async()=>{await signIn();fireEvent.click(screen.getByRole('link',{name:'Оформить заказ'}));fireEvent.click(screen.getByRole('button',{name:'Показать прайс-лист'}));await screen.findByText('Хлеб из КИС');fireEvent.click(screen.getByRole('button',{name:'Добавить лоток 1263'}));expect(screen.getByLabelText('Лотки 1263')).toHaveValue('1');fireEvent.click(screen.getAllByRole('button',{name:'Проверить заказ'})[0]);expect(screen.getByRole('dialog')).toHaveTextContent('8 шт.');expect(screen.getByRole('button',{name:'Отправить заказ'})).toBeDisabled();fireEvent.click(screen.getByRole('button',{name:'Вернуться к заказу'}));vi.mocked(window.confirm).mockReturnValue(false);fireEvent.change(screen.getByLabelText('Покупатель'),{target:{value:p2}});expect(screen.getByLabelText('Лотки 1263')).toHaveValue('1');expect(requests.some(p=>p.startsWith('/api/v1'))).toBe(false);});
  it('opens real order line items',async()=>{await signIn();fireEvent.click(screen.getByRole('link',{name:'История заказов'}));await screen.findByRole('button',{name:'№948'});fireEvent.click(screen.getByRole('button',{name:'№948'}));await waitFor(()=>expect(screen.queryByText('Загружаем состав…')).not.toBeInTheDocument());expect(screen.getByRole('dialog')).toHaveTextContent('917');expect(screen.getByRole('dialog')).toHaveTextContent('Хлеб из заказа');expect(screen.getByRole('dialog')).toHaveTextContent('15 шт.');});
+ it('opens the entire history row with mouse/keyboard and removes raw KIS state from list and detail',async()=>{
+  await signIn();fireEvent.click(screen.getByRole('link',{name:'История заказов'}));const row=await screen.findByRole('row',{name:'Заказ №948'});
+  expect(screen.queryByText('Статус КИС')).not.toBeInTheDocument();fireEvent.click(within(row).getAllByRole('cell')[4]);
+  await screen.findByText('Хлеб из заказа');expect(screen.queryByText('Статус КИС')).not.toBeInTheDocument();expect(within(screen.getByRole('dialog')).getByRole('button',{name:'Повторить заказ'})).toBeEnabled();
+  fireEvent.click(screen.getByRole('button',{name:'Закрыть'}));fireEvent.keyDown(screen.getByRole('row',{name:'Заказ №948'}),{key:'Enter'});await screen.findByRole('dialog',{name:'Заказ №948'});
+ });
+ it('repeats from the row into a new draft using fresh prices, exact pieces and the selected date without POST',async()=>{
+  await signIn();fireEvent.click(screen.getByRole('link',{name:'История заказов'}));fireEvent.click(await screen.findByRole('button',{name:'Повторить заказ №948'}));
+  expect(screen.queryByRole('dialog',{name:'Заказ №948'})).not.toBeInTheDocument();const dialog=screen.getByRole('dialog',{name:'Повторить заказ №948'});
+  const date=api.tomorrow();fireEvent.change(within(dialog).getByLabelText('Дата нового заказа'),{target:{value:date}});fireEvent.change(within(dialog).getByLabelText('Продукция повторного заказа'),{target:{value:'0'}});
+  fireEvent.click(within(dialog).getByRole('button',{name:'Перенести в новый заказ'}));
+  await screen.findByText(/Заказ №948 перенесён/);expect(screen.getByLabelText('Лотки 1263')).toHaveValue('1');expect(screen.getByLabelText('Штуки 1263')).toHaveValue('7');expect(screen.getByLabelText('Дата заказа')).toHaveValue(date);expect(screen.getByLabelText('Группа продукции')).toHaveValue('0');
+  expect(requests.some(p=>p.includes('DateOrd='+api.timestamp(date)+'&Group=0'))).toBe(true);
+  fireEvent.click(screen.getAllByRole('button',{name:'Проверить заказ'})[0]);expect(screen.getByRole('dialog')).toHaveTextContent('15 шт.');expect(screen.getByRole('dialog')).toHaveTextContent('523,50');
+  expect(vi.mocked(fetch).mock.calls.some(([url,init])=>String(url)==='/service/orders'&&init?.method==='POST')).toBe(false);expect(api.pending()).toBeNull();
+ });
+ it('offers the same repeat action inside order details',async()=>{
+  await signIn();fireEvent.click(screen.getByRole('link',{name:'История заказов'}));fireEvent.click(await screen.findByRole('button',{name:'№948'}));await screen.findByText('Хлеб из заказа');
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Повторить заказ'}));expect(screen.getByRole('dialog',{name:'Повторить заказ №948'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Перенести в новый заказ'}));await screen.findByText(/Заказ №948 перенесён/);expect(screen.getByLabelText('Штуки 1263')).toHaveValue('7');
+ });
+ it('requires explicit partial transfer when a historical product is absent from the current matrix',async()=>{
+  vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>String(input).startsWith('/service/orders/7')?response({payer:p1,client:11,order:{id:7,order_number:948},itemsAvailable:true,items:[{id:700,code:'1263',name:'Хлеб из заказа',quantity:16,price:90,sum:1440},{id:701,code:'999',name:'Снятый товар',quantity:3,price:50,sum:150}]}):mockFetch(input,init)));
+  await signIn();fireEvent.click(screen.getByRole('link',{name:'История заказов'}));fireEvent.click(await screen.findByRole('button',{name:'Повторить заказ №948'}));fireEvent.click(screen.getByRole('button',{name:'Перенести в новый заказ'}));
+  await screen.findByText(/Эти позиции не будут перенесены/);expect(screen.getByRole('dialog')).toHaveTextContent('Снятый товар');expect(screen.getByRole('dialog')).toHaveTextContent('Нет в прайсе');
+  expect(screen.queryByText(/Заказ №948 перенесён/)).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Перенести доступные позиции'}));await screen.findByText(/Не перенесено позиций: 1/);expect(screen.getByLabelText('Лотки 1263')).toHaveValue('2');
+ });
+ it('does not round incompatible trays into a different quantity',async()=>{
+  minimum=null;await signIn();fireEvent.click(screen.getByRole('link',{name:'История заказов'}));fireEvent.click(await screen.findByRole('button',{name:'Повторить заказ №948'}));fireEvent.click(screen.getByRole('button',{name:'Перенести в новый заказ'}));
+  await screen.findByText(/Эти позиции не будут перенесены/);expect(screen.getByRole('dialog')).toHaveTextContent('15 шт.');expect(screen.getByRole('dialog')).toHaveTextContent('целыми лотками по 8');expect(screen.getByRole('button',{name:'Перенести доступные позиции'})).toBeDisabled();
+ });
+ it('keeps an existing cart when the fresh catalog fails and repeat is cancelled',async()=>{
+  let catalogs=0;vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{if(String(input).startsWith('/service/catalog')&&++catalogs>1)return response({code:'UPSTREAM_HTTP'},502);return mockFetch(input,init);}));
+  await signIn();fireEvent.click(screen.getByRole('link',{name:'Оформить заказ'}));fireEvent.click(screen.getByRole('button',{name:'Показать прайс-лист'}));await screen.findByText('Хлеб из КИС');fireEvent.click(screen.getByRole('button',{name:'Добавить лоток 1263'}));
+  fireEvent.click(screen.getByRole('link',{name:'История заказов'}));fireEvent.click(await screen.findByRole('button',{name:'Повторить заказ №948'}));fireEvent.click(screen.getByRole('button',{name:'Перенести в новый заказ'}));await screen.findByText(/UPSTREAM_HTTP/);fireEvent.click(screen.getByRole('button',{name:'Отмена'}));fireEvent.click(screen.getByRole('link',{name:'Оформить заказ'}));expect(screen.getByLabelText('Лотки 1263')).toHaveValue('1');
+ });
+ it('asks before replacing an existing cart and retains it if replacement is declined',async()=>{
+  await signIn();fireEvent.click(screen.getByRole('link',{name:'Оформить заказ'}));fireEvent.click(screen.getByRole('button',{name:'Показать прайс-лист'}));await screen.findByText('Хлеб из КИС');fireEvent.click(screen.getByRole('button',{name:'Добавить лоток 1263'}));
+  fireEvent.click(screen.getByRole('link',{name:'История заказов'}));fireEvent.click(await screen.findByRole('button',{name:'Повторить заказ №948'}));vi.mocked(window.confirm).mockReturnValue(false);fireEvent.click(screen.getByRole('button',{name:'Перенести в новый заказ'}));await screen.findByText(/Доступно для переноса/);
+  expect(window.confirm).toHaveBeenCalledWith('Заменить текущую корзину составом повторяемого заказа?');fireEvent.click(screen.getByRole('button',{name:'Отмена'}));fireEvent.click(screen.getByRole('link',{name:'Оформить заказ'}));expect(screen.getByLabelText('Лотки 1263')).toHaveValue('1');expect(screen.getByLabelText('Штуки 1263')).toHaveValue('0');
+ });
+ it('ignores a late repeat response after cancellation and does not start duplicate preparations',async()=>{
+  let release:((r:Response)=>void)|undefined,catalogs=0;
+  vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{if(String(input).startsWith('/service/catalog')){catalogs++;return new Promise<Response>(resolve=>{release=resolve;});}return mockFetch(input,init);}));
+  await signIn();fireEvent.click(screen.getByRole('link',{name:'История заказов'}));fireEvent.click(await screen.findByRole('button',{name:'Повторить заказ №948'}));const button=screen.getByRole('button',{name:'Перенести в новый заказ'});fireEvent.click(button);fireEvent.click(button);await waitFor(()=>expect(catalogs).toBe(1));fireEvent.click(screen.getByRole('button',{name:'Отмена'}));
+  await act(async()=>{release?.(new Response(JSON.stringify({payer:p1,client:11,DateOrd:api.timestamp(api.today()),Group:1,count:0,products:[]}),{headers:{'Content-Type':'application/json'}}));});
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(screen.queryByText(/Заказ №948 перенесён/)).not.toBeInTheDocument();expect(screen.getByRole('row',{name:'Заказ №948'})).toBeInTheDocument();
+ });
+ it('disables repeat for a viewer and for an unresolved submission',async()=>{
+  vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>String(input)==='/service/context'?response({user:{name:'Покупатель (демо)',role:'viewer'},payers:[{id:p1,name:'Первый покупатель',access:'all'},{id:p2,name:'Второй покупатель',access:'limited'}]}):mockFetch(input,init)));
+  await signIn();fireEvent.click(screen.getByRole('link',{name:'История заказов'}));expect(await screen.findByRole('button',{name:'Повторить заказ №948'})).toBeDisabled();
+  fireEvent.click(screen.getByRole('button',{name:'№948'}));await screen.findByText('Хлеб из заказа');expect(within(screen.getByRole('dialog')).getByRole('button',{name:'Повторить заказ'})).toBeDisabled();cleanup();api.clearSession();vi.stubGlobal('fetch',vi.fn(mockFetch));
+  await signIn();api.savePending({payer:p1,client:11,DateOrd:api.timestamp(api.today()),Group:1,products:[{id:66,quantity:8,price:34.9}]});fireEvent.click(screen.getByRole('link',{name:'История заказов'}));expect(await screen.findByRole('button',{name:'Повторить заказ №948'})).toBeDisabled();
+ });
+ it('rejects foreign or corrupt historical detail before creating a repeat draft',async()=>{
+  vi.stubGlobal('fetch',vi.fn(()=>response({payer:p2,client:11,order:{id:7},itemsAvailable:true,items:[]})));
+  await expect(api.orderDetail(p1,11,7)).rejects.toMatchObject({code:'INVALID_ORDER_ITEMS'});
+ });
  it('rejects mismatched payer metadata instead of displaying it',async()=>{vi.stubGlobal('fetch',vi.fn(()=>response({payer:p2,client:11,orders:[],count:0})));await expect(api.orders(p1,11,new AbortController().signal)).rejects.toMatchObject({code:'INVALID_ORDERS'});});
  it('handles empty client cursor pages and refuses a non-advancing cursor',async()=>{let i=0;vi.stubGlobal('fetch',vi.fn(()=>response(i++===0?{payer:p1,clients:[],count:0,hasMore:true,nextCursor:10}:{payer:p1,clients:[],count:0,hasMore:true,nextCursor:10})));await expect(api.clients(p1,new AbortController().signal)).rejects.toMatchObject({code:'INVALID_CURSOR'});});
  it('sends one confirmed order and refreshes real history',async()=>{

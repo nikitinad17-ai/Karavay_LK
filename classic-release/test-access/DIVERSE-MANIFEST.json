@@ -1,0 +1,60 @@
+{
+  "version": "3.8.4",
+  "files": {
+    "pb_public/index.html": "adf852a36796e8406ed1f36b517bbee833dc17269df399c1f2dcd4b63846dd25",
+    "pb_hooks/karavay-test-access.js": "aa4d7f22c525eb8c7a8c4a43e4c8a22ed5072b9c2e60f265f7a8e0f2a0a0ff0e",
+    "test-access/select-diverse-history.py": "c3fd782cdbc764b65df49596937489f6d558da1c74370ed2b5d61b7e82e95af7",
+    "test-access/install-diverse-history.py": "56eb81c15f94b42a02ba360163b21e73da6f190cb5d1a0a277381d8eaf25b5be",
+    "test-access/1793090000_test_diverse_history_users.js": "1dd3c228099f64b4ff81b4d1a609bd7d43c83e8bfb5b43c1e9929f5cd2030876",
+    "test-access/DIVERSE-HISTORY-3.8.4.md": "b6fd5da73f4e02f3cb146093dbeef942dc0ee50e798aced0f2917c937c9e73f7"
+  },
+  "known_html": [
+    "adf852a36796e8406ed1f36b517bbee833dc17269df399c1f2dcd4b63846dd25",
+    "82593d4b3ae76b058786cffadffdf0c5739e1ee0867908366492c82d1b409a6a",
+    "f360ac9030f35615c577d7dcd5af94801abf6108ea43d0a6bf12477faba70e6f",
+    "15400446e03c69e118fcd1c0a6edf3b9f4415694368b2c27f7c66513ab5d2f93",
+    "7d838873ecdc7ee5ae959bc3153d5c30772b7bf2779e9cae5be52bc8a46c7537",
+    "b79b6009c6804ddbf941566d77bc1a24fc5b51fc84c98fd14ae9b6c7b3eaaca6",
+    "899f81157a6204251fb2348af8b244ac8a465ecb3186a0aa08be951306f49f0b",
+    "02574f1c1d0a98684aa8550ff5b3dccf1a5d9867bcddca3a4672c91518c4c12e",
+    "54d6097346efb055507ae669697159a80cf13a73350c9cd50837a0571106ed2c"
+  ],
+  "route_sha256": "8bcca34c0fb84e30b4592b5ddb4ad17e8ab3ffc2b887f8376074a38bce1e540c",
+  "required_fields": {
+    "users": {
+      "id": "text",
+      "email": "email",
+      "active": "bool",
+      "must_change_password": "bool",
+      "role": "relation",
+      "role_code": "select",
+      "name": "text",
+      "login": "text"
+    },
+    "roles": {
+      "code_role": "text",
+      "active": "bool"
+    },
+    "payers": {
+      "id_pay": "number",
+      "active": "bool",
+      "kod_pay": "text",
+      "name_pay": "text"
+    },
+    "clients": {
+      "id_clt": "number",
+      "payer": "relation",
+      "active": "bool",
+      "kod_clt": "text",
+      "name_clt": "text"
+    },
+    "rights": {
+      "user": "relation",
+      "payer": "relation",
+      "client": "relation",
+      "scope": "select",
+      "kis_client_id": "number",
+      "active": "bool"
+    }
+  }
+}

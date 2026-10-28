@@ -21,7 +21,9 @@ selection = module('buyer_selection', HERE / 'select-buyers.py')
 MIGRATION = '1792400000_test_buyer_users.js'
 ROOT = pathlib.Path('/opt/pocketbase')
 HELPER = 'pb_hooks/karavay-test-access.js'
-OLD_HASHES = {'e569691d5a3227c535e57565bcdc6583dd80b53401236c6d302c53b914003fe8',
+OLD_HASHES = {'1cc4199f80209ccf1b783352deab667fbfd7a0878e011e140ea7252188be3c5b',
+              '753ff0f4136b7cf2861dfac44c26d6d6091219df358991360656e2bbac3a478a',
+              'e569691d5a3227c535e57565bcdc6583dd80b53401236c6d302c53b914003fe8',
               '664c97a27bde4a91a6b6f9ea8d9a38c7dda799ec0a89b8dbf484901bc7929d8f'}
 
 def sha(path):

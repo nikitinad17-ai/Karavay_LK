@@ -50,6 +50,7 @@ export async function changePassword(oldPassword:string,password:string){if(!ses
 export function validId(n:unknown):n is number{return typeof n==='number'&&Number.isSafeInteger(n)&&n>0;}
 export function params(payer:string,client:number){if(!/^[a-z0-9]{15}$/.test(payer)||!validId(client))throw new Error('Invalid context');return 'payer='+payer+'&client='+client;}
 export const today=()=>new Date(Date.now()+10800000).toISOString().slice(0,10);
+export const tomorrow=()=>new Date(Date.now()+10800000+86400000).toISOString().slice(0,10);
 export function timestamp(date:string){if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error('Invalid date');const n=Date.parse(date+'T00:00:00+03:00');if(!Number.isFinite(n)||new Date(n+10800000).toISOString().slice(0,10)!==date)throw new Error('Invalid date');return n/1000;}
 export const lotOnly=(p:Product)=>p.kolshtordmin===null;
 export function quantityError(p:Product,n:number){if(!Number.isSafeInteger(n)||n<1)return 'Укажите целое количество больше нуля.';if(p.cenaotp===null)return 'В КИС не указана цена.';if(lotOnly(p)){if(!validId(p.kol_sht))return 'В КИС не указано число штук в лотке. Заказ позиции недоступен.';if(n%p.kol_sht!==0)return 'Товар отгружается только целыми лотками по '+p.kol_sht+' шт.';}if(p.kolshtordmin!==null&&n<p.kolshtordmin)return 'Минимальное количество: '+p.kolshtordmin+' шт.';return '';}
@@ -66,6 +67,14 @@ export async function catalog(payer:string,client:number,date:string,group:numbe
  return d.products;
 }
 export async function orders(payer:string,client:number,signal:AbortSignal){const d=await request<{payer:string;client:number;count:number;orders:Order[]}>('/service/orders?'+params(payer,client),{signal});if(d.payer!==payer||d.client!==client||!Array.isArray(d.orders)||d.count!==d.orders.length||new Set(d.orders.map(o=>o.id)).size!==d.orders.length||d.orders.some(o=>!validId(o.id)))throw new ApiError(502,'INVALID_ORDERS');return d.orders;}
+
+export async function orderDetail(payer:string,client:number,id:number,signal?:AbortSignal){
+ if(!validId(id))throw new ApiError(400,'INVALID_ORDER');
+ const d=await request<Detail>('/service/orders/'+id+'?'+params(payer,client),{signal});
+ const number=(v:number)=>typeof v==='number'&&Number.isFinite(v)&&v>=0;
+ if(d.payer!==payer||d.client!==client||d.order?.id!==id||d.itemsAvailable!==true||!Array.isArray(d.items)||d.items.length>1000||d.items.some(i=>!i||!validId(i.id)||typeof i.code!=='string'||typeof i.name!=='string'||!Number.isSafeInteger(i.quantity)||i.quantity<0||!number(i.price)||!number(i.sum)))throw new ApiError(502,'INVALID_ORDER_ITEMS');
+ return d;
+}
 
 export interface OrderDraft {payer:string;client:number;DateOrd:number;Group:number;products:{id:number;quantity:number;price:number}[]}
 export interface Submission {key:string;body:OrderDraft}
