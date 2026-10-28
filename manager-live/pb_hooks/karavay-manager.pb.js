@@ -13,5 +13,5 @@ routerAdd('POST','/service/account/change-password',e=>require(__hooks+'/karavay
 onRecordConfirmPasswordResetRequest(e=>{e.record.set('must_change_password',false);e.next();},'users');
 
 // Ownership of an unassigned account is server-managed, including native API writes.
-onRecordCreateRequest(e=>{if(!e.hasSuperuserAuth()&&e.record.get('manager_owner'))throw new ForbiddenError('Managed field.');e.next();},'users');
-onRecordUpdateRequest(e=>{if(!e.hasSuperuserAuth()&&e.record.get('manager_owner')!==e.record.original().get('manager_owner'))throw new ForbiddenError('Managed field.');e.next();},'users');
+onRecordCreateRequest(e=>{if(!e.hasSuperuserAuth()&&(e.record.get('manager_owner')||e.record.get('account_type')))throw new ForbiddenError('Managed field.');e.next();},'users');
+onRecordUpdateRequest(e=>{if(!e.hasSuperuserAuth()&&(e.record.get('manager_owner')!==e.record.original().get('manager_owner')||e.record.get('account_type')!==e.record.original().get('account_type')))throw new ForbiddenError('Managed field.');e.next();},'users');

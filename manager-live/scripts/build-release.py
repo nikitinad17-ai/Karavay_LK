@@ -10,7 +10,7 @@ import subprocess
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
-NAME='Karavay-Manager-0.9.0-Recipients-20261027'
+NAME='Karavay-Manager-0.9.1-Users-20261028'
 
 def build(output):
     output=Path(output).resolve();output.mkdir(parents=True,exist_ok=True)
@@ -19,7 +19,7 @@ def build(output):
     for name,digest in expected.items():
         if hashlib.sha256((ROOT/name).read_bytes()).hexdigest()!=digest:
             raise RuntimeError('Manifest checksum mismatch: '+name)
-    names=[*expected,'MANIFEST.json','README.md','RELEASE_0.9.0.md','RELEASE_0.8.1.md','RELEASE_0.8.0.md']
+    names=[*expected,'MANIFEST.json','README.md','RELEASE_0.9.1.md','RELEASE_0.9.0.md','RELEASE_0.8.1.md','RELEASE_0.8.0.md']
     payload=io.BytesIO()
     with zipfile.ZipFile(payload,'w',zipfile.ZIP_DEFLATED) as archive:
         for name in names:archive.write(ROOT/name,name)
@@ -39,11 +39,11 @@ $ErrorActionPreference = 'Stop'
 if ($PreflightOnly -and $ResumeSetup) { throw 'Choose either -PreflightOnly or -ResumeSetup.' }
 if ($TestLoginOnly -and $ResumeSetup) { throw 'Choose either -TestLoginOnly or -ResumeSetup.' }
 $Install = -not ($PreflightOnly -or $ResumeSetup)
-$ConfigureWorkspace = -not ($PreflightOnly -or $TestLoginOnly)
-$EnableTestLogin = $TestLoginOnly -and -not $PreflightOnly
+$ConfigureWorkspace = $ResumeSetup -and -not $PreflightOnly
+$EnableTestLogin = -not $PreflightOnly
 $CopyToVM = $true
 $runId = 'manager-08-' + [Guid]::NewGuid().ToString('N')
-$label = 'Karavay-Manager-0.9.0-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $runId.Substring($runId.Length - 8)
+$label = 'Karavay-Manager-0.9.1-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $runId.Substring($runId.Length - 8)
 $folder = Join-Path (Join-Path $env:USERPROFILE 'Downloads') $label
 New-Item -ItemType Directory -Path $folder | Out-Null
 $bytes = [Convert]::FromBase64String('__PAYLOAD__')

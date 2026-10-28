@@ -18,7 +18,7 @@ def toggle(root,enabled=None,origin='http://192.168.25.98:8090',pb_url='http://1
     if not re.fullmatch(r'https?://[A-Za-z0-9.:-]+',origin):raise RuntimeError('Invalid manager origin')
     manifest=json.loads((SOURCE/'MANIFEST.json').read_text())
     for name in ['pb_hooks/karavay-manager-test.js','pb_hooks/karavay-manager.pb.js','pb_hooks/karavay-manager.js','pb_public/manager/index.html','pb_public/manager/app.js']:
-        if hashlib.sha256((root/name).read_bytes()).hexdigest()!=manifest['package'][name]:raise RuntimeError('Install manager 0.9.0 first: '+name)
+        if hashlib.sha256((root/name).read_bytes()).hexdigest()!=manifest['package'][name]:raise RuntimeError('Install manager 0.9.1 first: '+name)
     path=root/'pb_data'/CONFIG
     if path.is_symlink():raise RuntimeError('Test-login config must not be a symlink')
     if enabled is False:
@@ -42,7 +42,7 @@ def toggle(root,enabled=None,origin='http://192.168.25.98:8090',pb_url='http://1
         os.replace(name,path)
         opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with opener.open(pb_url+'/service/manager/test-login',timeout=20) as response:result=json.load(response)
-        if result.get('version')!='0.9.0' or result.get('enabled') is not True:raise RuntimeError('Server did not confirm test entry')
+        if result.get('version')!='0.9.1' or result.get('enabled') is not True:raise RuntimeError('Server did not confirm test entry')
     except Exception:
         if before is None:path.unlink(missing_ok=True)
         else:

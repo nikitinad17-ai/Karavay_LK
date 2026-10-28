@@ -63,8 +63,14 @@ class Preflight(unittest.TestCase):
     self.assertIn('PREFLIGHT: PASSED',self.preflight())
     self.assertEqual(before,self.snapshot())
 
- def test_rejects_unknown_gateway_without_writes(self):
+ def test_preserves_other_client_orders_version(self):
   (self.root/'pb_hooks/karavay-orders.pb.js').write_text('0'*64)
+  before=self.snapshot()
+  self.preflight()
+  self.assertEqual(before,self.snapshot())
+
+ def test_rejects_unknown_gateway_without_writes(self):
+  (self.root/'pb_hooks/karavay-context.pb.js').write_text('0'*64)
   before=self.snapshot()
   with self.assertRaisesRegex(RuntimeError,'Installed gateway differs'):
    self.preflight()
@@ -144,7 +150,7 @@ class Preflight(unittest.TestCase):
   self.assertEqual((self.root/'pb_public/index.html').read_text(),'Existing client 3.8.0')
   self.assertTrue((self.root/'pb_public/manager/theme.css').exists())
   backup=next(backups.iterdir());self.assertEqual((backup/'pb_public/manager/app.js').read_bytes(),old)
-  self.assertIn('MANAGER_RELEASE_INSTALLED: 0.9.0',output)
+  self.assertIn('MANAGER_RELEASE_INSTALLED: 0.9.1',output)
 
  def test_partial_copy_failure_restores_the_affected_file(self):
   old,target,backups,output=self.simulated_install(fail_copy=True)

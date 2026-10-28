@@ -47,22 +47,31 @@ print(raw,end='\\n__KIS_HTTP__:200')
   else:raise RuntimeError('PB did not start')
   admin=request('/api/collections/_superusers/auth-with-password',{'identity':mail,'password':password})['token']
   schema=json.load(open(ROOT/'tests/schema.json'))
+  schema[0]['fields']=[f for f in schema[0]['fields'] if f['name']!='account_type']
     # Import returns 204: handle it separately to avoid JSON-decoding empty bodies.
   req=urllib.request.Request(base+'/api/collections/import',data=json.dumps({'collections':schema,'deleteMissing':False}).encode(),headers={'Authorization':admin,'Content-Type':'application/json'},method='PUT')
   try:
    with urllib.request.urlopen(req) as r:assert r.status==204
   except urllib.error.HTTPError as e:raise RuntimeError(e.read().decode())
+  # Upgrade an existing account, including its stored password/token key.
+  oldrole=request('/api/collections/roles/records',{'code_role':'owner','name_role':'Pre-upgrade owner','active':False},admin)['id']
+  olduser=request('/api/collections/users/records',{'name':'Existing account','login':'preupgrade','email':'preupgrade@example.test','role':oldrole,'role_code':'owner','active':True,'must_change_password':False,'password':password,'passwordConfirm':password},admin)['id']
   # Apply the exact shipped additive migration to the pre-update fixture schema.
   process.terminate();process.wait(timeout=10)
+  import sqlite3
+  with sqlite3.connect(d/'pb_data/data.db') as db:old_credentials=db.execute('SELECT password,tokenKey FROM users WHERE id=?',(olduser,)).fetchone()
   shutil.copytree(ROOT/'pb_migrations',d/'pb_migrations')
   subprocess.run([BINARY,'migrate','up','--dir',str(d/'pb_data'),'--migrationsDir',str(d/'pb_migrations')],cwd=d,env=env,check=True,stdout=subprocess.DEVNULL)
   subprocess.run([BINARY,'migrate','up','--dir',str(d/'pb_data'),'--migrationsDir',str(d/'pb_migrations')],cwd=d,env=env,check=True,stdout=subprocess.DEVNULL)
+  with sqlite3.connect(d/'pb_data/data.db') as db:assert old_credentials==db.execute('SELECT password,tokenKey FROM users WHERE id=?',(olduser,)).fetchone()
   process=subprocess.Popen([BINARY,'serve','--http=127.0.0.1:18943','--dir',str(d/'pb_data'),'--hooksDir',str(d/'pb_hooks'),'--publicDir',str(d/'pb_public')],cwd=d,env=env,stdout=log,stderr=log)
   for i in range(100):
    try:request('/api/health');break
    except Exception:time.sleep(.1)
   def create(col,body):return request('/api/collections/'+col+'/records',body,admin)['id']
-  roles={code:create('roles',{'code_role':code,'name_role':code,'active':True}) for code in ['owner','manager','viewer']}
+  roles={'owner':oldrole,**{code:create('roles',{'code_role':code,'name_role':code,'active':True}) for code in ['manager','viewer']}}
+  req=urllib.request.Request(base+'/api/collections/roles/records/'+oldrole,data=json.dumps({'active':True}).encode(),headers={'Authorization':admin,'Content-Type':'application/json'},method='PATCH');urllib.request.urlopen(req).close()
+  assert request('/api/collections/users/auth-with-password',{'identity':'preupgrade@example.test','password':password})['record']['id']==olduser
   def user(login,role='manager',active=True):return create('users',{'name':login,'login':login,'email':login+'@example.test','role':roles[role],'role_code':role,'active':active,'must_change_password':False,'password':password,'passwordConfirm':password})
   mid=user('manager');other=user('other');viewer=user('viewer','viewer');owner=user('buyerowner','owner')
   p1=create('payers',{'id_pay':1,'kod_pay':'P1','name_pay':'Test buyer 1','contact_email':'p1@example.test','active':True})
@@ -165,6 +174,16 @@ print(raw,end='\\n__KIS_HTTP__:200')
   check('/api/collections/users/confirm-password-reset',{'token':'invalid','password':password+'reset','passwordConfirm':password+'reset'},t='',expect=400)
   check('/api/collections/users/confirm-password-reset',{'token':resetToken,'password':password+'reset','passwordConfirm':password+'reset'},t='',expect=204)
   resetAuth=request('/api/collections/users/auth-with-password',{'identity':'resetcustomer@example.test','password':password+'reset'});assert resetAuth['record']['must_change_password'] is False
+  # Client/Payer selection persists before rights exist. Higher auth roles remain forbidden.
+  body={'action':'create_user','name':'Simple client','login':'simpleclient','email':'simple.client@example.test','role_code':'owner','account_type':'client','password':password}
+  simple=check('/service/manager/action',body)['id']
+  assert next(u for u in check('/service/manager/state')['users'] if u['id']==simple)['account_type']=='client'
+  check('/service/manager/action',{'action':'set_rights','user':simple,'rights':[{'payer':p1,'scope':'all','kis_client_id':0}]},expect=400)
+  check('/service/manager/action',{'action':'create_user',**{k:v for k,v in body.items() if k!='action'},'role_code':'manager'},expect=400)
+  check('/service/manager/action',{'action':'delete_user','user':simple,'confirm_login':'wrong'},expect=400)
+  check('/service/manager/action',{'action':'delete_user','user':simple,'confirm_login':'simpleclient'},t=other_token,expect=403)
+  check('/service/manager/action',{'action':'delete_user','user':simple,'confirm_login':'simpleclient'})
+  assert simple not in [u['id'] for u in check('/service/manager/state')['users']]
   # DOM integration uses real HTTP requests to the isolated PB (no browser rendering).
   subprocess.run(['node',str(ROOT/'tests/ui.cjs')],input=json.dumps({'url':base,'email':'manager@example.test','password':password}),text=True,check=True,cwd=ROOT.parent)
   # Run the delivered demo script logic on the same real PB fixture and KIS stub.

@@ -155,8 +155,10 @@ function userInput(app,b) {
   const name=text(b.name,200),email=text(b.email,254).toLowerCase(),login=text(b.login,100);
   if(!/^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$/.test(login)||!/^\S+@\S+\.\S+$/.test(email)||!['owner','viewer'].includes(b.role_code))fail(400,'INVALID_USER');
   const role=rows(app,'roles','code_role = {:code} && active = true',{code:b.role_code});if(role.length!==1)fail(409,'ROLE_UNAVAILABLE');
-  return {name,email,login,role:role[0].id,role_code:b.role_code};
+  if(b.account_type!==undefined&&!['','client','payer'].includes(b.account_type))fail(400,'INVALID_USER');
+  return {name,email,login,role:role[0].id,role_code:b.role_code,...(b.account_type===undefined?{}:{account_type:b.account_type})};
 }
+function typeMatches(kind,rs){if((kind==='client'&&rs.some(r=>r.scope==='all'))||(kind==='payer'&&rs.some(r=>r.scope!=='all')))fail(400,'ACCOUNT_TYPE_SCOPE');}
 function state(app,uid) {
   const m=manager(app,uid), payers=[], users=new Map();
   for(const [pid,a] of m.map) {
@@ -167,7 +169,7 @@ function state(app,uid) {
       const u=record(app,'users',r.get('user'));if(!['owner','viewer'].includes(u.get('role_code')))continue;
       if(!users.has(u.id)) {
         let editable=true;try{target(app,m,u.id);}catch(_){editable=false;}
-        users.set(u.id,{id:u.id,name:u.get('name'),email:u.get('email'),verified:u.get('verified')===true,login:u.get('login'),role_code:u.get('role_code'),active:u.get('active'),must_change_password:u.get('must_change_password'),editable,rights:[]});
+        users.set(u.id,{id:u.id,name:u.get('name'),email:u.get('email'),verified:u.get('verified')===true,login:u.get('login'),role_code:u.get('role_code'),account_type:u.get('account_type')||'',active:u.get('active'),must_change_password:u.get('must_change_password'),editable,rights:[]});
       }
       users.get(u.id).rights.push({id:r.id,payer:pid,scope:r.get('scope'),kis_client_id:r.get('kis_client_id'),active:r.get('active')});
     }
@@ -175,21 +177,21 @@ function state(app,uid) {
   for(const u of rows(app,'users','manager_owner = {:uid}',{uid})) {
     if(users.has(u.id)||!['owner','viewer'].includes(u.get('role_code')))continue;
     const rs=rows(app,'rights','user = {:id}',{id:u.id});if(rs.length)continue;
-    users.set(u.id,{id:u.id,name:u.get('name'),email:u.get('email'),verified:u.get('verified')===true,login:u.get('login'),role_code:u.get('role_code'),active:u.get('active'),must_change_password:u.get('must_change_password'),editable:true,rights:[]});
+    users.set(u.id,{id:u.id,name:u.get('name'),email:u.get('email'),verified:u.get('verified')===true,login:u.get('login'),role_code:u.get('role_code'),account_type:u.get('account_type')||'',active:u.get('active'),must_change_password:u.get('must_change_password'),editable:true,rights:[]});
   }
   const now=manager(app,uid);
   const signature=x=>JSON.stringify(Array.from(x.map,([pid,a])=>[pid,a.all,Array.from(a.ids).sort(),a.record.get('id_pay'),a.record.get('active')]).sort());
   if(signature(m)!==signature(now))fail(403,'ACCESS_CHANGED');
-  return {version:'0.9.0',manager:{id:uid,name:m.user.get('name'),email:m.user.get('email')},payers,users:Array.from(users.values())};
+  return {version:'0.9.1',manager:{id:uid,name:m.user.get('name'),email:m.user.get('email')},payers,users:Array.from(users.values())};
 }
 function mutate(e,b) {
   const uid=e.auth.id, app=e.app, m=manager(app,uid);
-  const allowed=['create_user','edit_user','set_rights','toggle_user','reset_password','create_payer','edit_payer','attach_client'];
+  const allowed=['create_user','edit_user','set_rights','toggle_user','delete_user','reset_password','create_payer','edit_payer','attach_client'];
   if(!b||!allowed.includes(b.action))fail(400,'INVALID_ACTION');
   let prepared=null, input=null, picked=null;
   if(['create_user','edit_user'].includes(b.action)) input=userInput(app,b);
   if(b.action==='set_rights')target(app,m,b.user);
-  if(b.action==='create_user'||b.action==='set_rights')prepared=assignments(app,m,b.rights===undefined&&b.action==='create_user'?[]:b.rights);
+  if(b.action==='create_user'||b.action==='set_rights'||(b.action==='edit_user'&&b.rights!==undefined))prepared=assignments(app,m,b.rights===undefined&&b.action==='create_user'?[]:b.rights);
   if(b.action==='create_user' && (typeof b.password!=='string'||b.password.length<12||b.password.length>128))fail(400,'PASSWORD_TOO_SHORT');
   if(b.action==='attach_client')picked=selected(area(m,b.payer,false,true),b.kis_client_id);
   if(b.action==='reset_password'){
@@ -219,15 +221,22 @@ function mutate(e,b) {
     }
     if(b.action==='create_user'){
       const data=userInput(tx,b),u=new Record(tx.findCollectionByNameOrId('users'));
-      for(const k of Object.keys(data))u.set(k,data[k]);
+      typeMatches(data.account_type,prepared);for(const k of Object.keys(data))u.set(k,data[k]);
       u.setPassword(b.password);u.set('active',true);u.set('must_change_password',true);u.set('manager_owner',uid);tx.save(u);saveRights(tx,u.id,materialize(tx,fresh,prepared));result={id:u.id};
-    }else if(['edit_user','toggle_user','set_rights'].includes(b.action)){
+    }else if(['edit_user','toggle_user','set_rights','delete_user'].includes(b.action)){
       const t=target(tx,fresh,b.user),u=t.user;
       if(b.action==='edit_user'){
-        const data=userInput(tx,b);if(u.get('email')!==data.email)u.setVerified(false);for(const k of Object.keys(data))u.set(k,data[k]);u.refreshTokenKey();tx.save(u);
+        const data=userInput(tx,b),rs=prepared?materialize(tx,fresh,prepared):t.rights.map(r=>({scope:r.get('scope')}));
+        typeMatches(data.account_type===undefined?u.get('account_type'):data.account_type,rs);
+        if(u.get('email')!==data.email)u.setVerified(false);for(const k of Object.keys(data))u.set(k,data[k]);
+        if(b.active!==undefined){if(typeof b.active!=='boolean')fail(400,'INVALID_INPUT');u.set('active',b.active);}
+        u.refreshTokenKey();tx.save(u);if(prepared)saveRights(tx,u.id,rs);
+      }else if(b.action==='delete_user'){
+        if(b.confirm_login!==u.get('login'))fail(400,'INVALID_INPUT');
+        for(const r of t.rights)tx.delete(r);tx.delete(u);
       }else if(b.action==='toggle_user'){
         if(typeof b.active!=='boolean')fail(400,'INVALID_INPUT');u.set('active',b.active);u.refreshTokenKey();tx.save(u);
-      }else {const rs=materialize(tx,fresh,prepared);saveRights(tx,u.id,rs);if(!rs.length){u.set('manager_owner',uid);tx.save(u);}}
+      }else {const rs=materialize(tx,fresh,prepared);typeMatches(u.get('account_type'),rs);saveRights(tx,u.id,rs);if(!rs.length){u.set('manager_owner',uid);tx.save(u);}}
       result={id:u.id};
     }else if(b.action==='create_payer'){
       if(rows(tx,'payers','id_pay = {:kid} || kod_pay = {:code}',{kid:b.id_pay,code:b.code}).length)fail(409,'PAYER_ALREADY_REGISTERED');

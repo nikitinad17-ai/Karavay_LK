@@ -175,7 +175,7 @@ print(json.dumps({'success':data is not None,'data':data}),end='\\n__KIS_HTTP__:
         assert len(accounts) == 6 and sum(a['scope'] == 'recipient' for a in accounts) == 4
         assert all(x['address'] for a in accounts for x in a['clients'])
         state = call('/service/manager/state', token=manager_token)
-        assert len(state['users']) == 6 and state['version'] == '0.9.0'
+        assert len(state['users']) == 6 and state['version'] == '0.9.1'
         # Repeating setup reuses all IDs and does not rotate passwords/token keys.
         with mock.patch.object(setup.subprocess, 'run', side_effect=service_run):
             setup.configure(root, api, True, BASE, 'fixture-repeat')

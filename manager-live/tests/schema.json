@@ -200,6 +200,17 @@
           "manager",
           "viewer"
         ]
+      },
+      {
+        "name": "account_type",
+        "type": "select",
+        "values": [
+          "client",
+          "payer"
+        ],
+        "maxSelect": 1,
+        "required": false,
+        "hidden": true
       }
     ],
     "indexes": [

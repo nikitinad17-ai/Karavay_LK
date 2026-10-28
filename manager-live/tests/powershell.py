@@ -106,7 +106,8 @@ with tempfile.TemporaryDirectory(prefix='manager-powershell-') as temp:
         return command
 
     calls,opens,_=run(complete,[])
-    check(calls,install=True,configure=True)
+    command=check(calls,install=True,configure=False)
+    assert 'Setup-Recipient-Demos.py' not in command
     assert opens==['http://192.168.25.98:8090/manager/']
     calls,opens,_=run(complete,['-ResumeSetup'])
     check(calls,install=False,configure=True)

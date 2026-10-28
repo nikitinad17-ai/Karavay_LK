@@ -11,7 +11,7 @@ if (($Install -or $ConfigureWorkspace -or $EnableTestLogin) -and -not $SourceRev
 $revision = if ($SourceRevision) { $SourceRevision } else { 'feature/manager-cabinet-v0.3' }
 $base = 'https://raw.githubusercontent.com/nikitinad17-ai/Karavay_LK/' + $revision + '/manager-live'
 $runId = 'manager-08-' + [Guid]::NewGuid().ToString('N')
-$label = 'Karavay-Manager-0.9.0-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $runId.Substring($runId.Length - 8)
+$label = 'Karavay-Manager-0.9.1-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $runId.Substring($runId.Length - 8)
 $folder = Join-Path (Join-Path $env:USERPROFILE 'Downloads') $label
 New-Item -ItemType Directory -Path $folder | Out-Null
 Invoke-WebRequest -UseBasicParsing -Uri ($base + '/MANIFEST.json') -OutFile (Join-Path $folder 'MANIFEST.json')

@@ -92,7 +92,7 @@ print(json.dumps({'success':True,'data':json.loads((pathlib.Path(__file__).resol
    users=api.rows('users','manager_owner = '+json.dumps(mid));assert len(users)==3
    token=call('/api/collections/users/auth-with-password',{'identity':'real_manager@example.test','password':password})['token']
    state=call('/service/manager/state',token=token)
-   assert state['version']=='0.9.0' and state['manager']['email']=='real_manager@example.test' and len(state['users'])==3
+   assert state['version']=='0.9.1' and state['manager']['email']=='real_manager@example.test' and len(state['users'])==3
    assert foreign not in {p['id'] for p in state['payers']}
    diag_spec=importlib.util.spec_from_file_location('manager_diagnostic',ROOT/'scripts/Check-Manager.py');diag=importlib.util.module_from_spec(diag_spec);diag_spec.loader.exec_module(diag)
    diagnostic_root=folder/'diagnostic';diagnostic_root.mkdir()

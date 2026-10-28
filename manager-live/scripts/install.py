@@ -13,8 +13,9 @@ def main():
  for name,digest in manifest['package'].items():
   if sha(SOURCE/name)!=digest:raise RuntimeError('Package hash mismatch: '+name)
  for name,digest in manifest['gateway'].items():
-  if sha(root/'pb_hooks'/name) not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Installed gateway differs: '+name+'. Re-export hooks before proceeding.')
- print('This release adds users.manager_owner for unassigned accounts; existing users, roles and rights are preserved.')
+  installed=sha(root/'pb_hooks'/name)
+  if name!='karavay-orders.pb.js' and installed not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Installed gateway differs: '+name+'. Re-export hooks before proceeding.')
+ print('Only manager metadata is added. Existing users, auth roles, rights and client files are preserved.')
  db=root/'pb_data/data.db'
  if not db.is_file():raise RuntimeError('Database not found')
  # Read definitions only. No data is read, exported or changed during preflight.
@@ -28,6 +29,8 @@ def main():
  owner=next((f for f in defs.get('users',[]) if f['name']=='manager_owner'),None)
  users_id=next(row[0] for row in definitions if row[1]=='users')
  if owner and (owner.get('type')!='relation' or owner.get('collectionId')!=users_id or owner.get('maxSelect')!=1 or owner.get('required')):raise RuntimeError('Conflicting users.manager_owner field')
+ account_type=next((f for f in defs.get('users',[]) if f['name']=='account_type'),None)
+ if account_type and (account_type.get('type')!='select' or account_type.get('maxSelect')!=1 or account_type.get('required') or account_type.get('values')!=['client','payer']):raise RuntimeError('Conflicting users.account_type field')
  if next(f for f in defs['payers'] if f['name']=='contact_email').get('required'):raise RuntimeError('payers.contact_email must be optional for KIS assignments')
  for col,required in manifest['required_fields'].items():
   fields={f['name']:f for f in defs.get(col,[])}
@@ -77,8 +80,10 @@ def main():
   con=sqlite3.connect('file:'+str(db)+'?mode=ro',uri=True)
   fields=json.loads(con.execute("SELECT fields FROM _collections WHERE name='users'").fetchone()[0]);con.close()
   if not any(f['name']=='manager_owner' and f['type']=='relation' for f in fields):raise RuntimeError('Ownership migration was not applied')
+  if not any(f['name']=='account_type' and f['type']=='select' and f.get('values')==['client','payer'] for f in fields):raise RuntimeError('Account type migration was not applied')
   for name,digest in manifest['gateway'].items():
-   if sha(root/'pb_hooks'/name) not in (digest if isinstance(digest,list) else [digest]):raise RuntimeError('Gateway changed unexpectedly')
+   expected=preserved[str(root/'pb_hooks'/name)] if name=='karavay-orders.pb.js' else (digest if isinstance(digest,list) else [digest])
+   if sha(root/'pb_hooks'/name) not in (expected if isinstance(expected,list) else [expected]):raise RuntimeError('Gateway changed unexpectedly')
   for name,digest in preserved.items():
    if sha(pathlib.Path(name))!=digest:raise RuntimeError('Protected client file changed: '+name)
   for name,digest in manifest['package'].items():
