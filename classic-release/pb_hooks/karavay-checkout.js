@@ -1,4 +1,4 @@
-// KIS contract captured 2026-10-14. No alternate/guessed POST formats or automatic retries.
+// POST request format supplied by KIS developers on 2026-10-28. No automatic retries.
 function fail(status,code){throw {status,code};}
 function id(n){return typeof n==='number'&&Number.isSafeInteger(n)&&n>0;}
 function number(n){return typeof n==='number'&&Number.isFinite(n)&&n>=0;}
@@ -77,6 +77,10 @@ function replay(record,hash){
   let body;try{body=JSON.parse(record.get('result_json'));}catch(_){fail(503,'SUBMISSION_UNKNOWN');}
   return {status:record.get('http_status'),body};
 }
+function orderPayload(b){
+  const day=new Date(b.DateOrd*1000+10800000).toISOString().slice(0,10);
+  return {client_id:b.client,order_date:day+'T00:00:00',products:b.products.map(p=>({id:p.id,kol_sht:p.quantity}))};
+}
 function create(e){
   if(e.request.url.rawQuery)fail(400,'INVALID_PARAMETERS');
   const b=validate(e.requestInfo().body),uid=e.auth.id,key=e.request.header.get('Idempotency-Key');
@@ -93,7 +97,7 @@ function create(e){
     const p=byId.get(line.id);if(!p)fail(409,'PRODUCT_UNAVAILABLE');
     if(!number(p.cenaotp)||p.cenaotp!==line.price)fail(409,'PRICE_CHANGED');
     if(p.kolshtordmin!=null&&(!Number.isSafeInteger(p.kolshtordmin)||p.kolshtordmin<0))fail(502,'INVALID_MATRIX');
-    // Empty minimum means full trays only; KolSht sent to KIS is always pieces.
+    // Empty minimum means full trays only; kol_sht sent to KIS is always pieces.
     if(p.kolshtordmin==null){
       if(!id(p.kolukl))fail(502,'INVALID_MATRIX');
       if(line.quantity%p.kolukl!==0)fail(400,'LOT_MULTIPLE');
@@ -117,7 +121,7 @@ function create(e){
   try{
     // Recheck after claiming, before the only POST. Never send PB token or supplied prices to KIS.
     authorize(e.app,uid,b.payer,b.client,true,kid);sent=true;
-    const r=transport('/orders',{Id_clt:b.client,DateOrd:b.DateOrd,Product:b.products.map(p=>({Id_prd:p.id,KolSht:p.quantity}))});
+    const r=transport('/orders',orderPayload(b));
     if(r.status===400&&r.doc&&r.doc.success===false){
       const mismatch=JSON.stringify(r.doc).includes('aId_Clt');
       return save('rejected',{status:mismatch?502:422,body:{code:mismatch?'KIS_CONTRACT_MISMATCH':'KIS_REJECTED'}},true);
